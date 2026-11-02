@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-suivi_migration}
+      POSTGRES_USER: ${POSTGRES_USER:-suivi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Définir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-suivi}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-suivi_migration}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:4000"
+
+volumes:
+  pgdata:
