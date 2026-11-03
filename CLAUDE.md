@@ -44,6 +44,12 @@ GONCALVES JESSICA, TEKI JOEL ACHI FABIEN, SIE AMAN NINA, GUEI CHRISTIAN RICHARD 
   l'export DAP sont ignorées.
 - « RAS » dans la colonne Difficultés signifie « rien à signaler ».
 
+### Carte
+`client/src/pages/Carte.jsx` + `client/src/data/civ_geo.json` (contours Natural Earth pré-projetés en SVG,
+chefs-lieux GeoNames ; régénérable avec `data/generer_civ_geo.js`). Un district est placé sur son chef-lieu
+(`lieuDistrict`), un site à ses coordonnées GPS (`site.latitude/longitude`, colonnes Excel « Latitude » /
+« Longitude », ignorées hors Côte d'Ivoire) sinon autour du chef-lieu. Aucune tuile en ligne.
+
 ## Architecture
 
 ```

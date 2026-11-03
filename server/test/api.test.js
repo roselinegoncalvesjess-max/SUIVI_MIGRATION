@@ -177,10 +177,13 @@ test('fichier sans colonnes d\'étapes, avec catégorie et dates de mission', as
   ws.getRow(4).getCell(n + 1).value = 'Catégorie de site';
   ws.getRow(4).getCell(n + 2).value = 'Début mission';
   ws.getRow(4).getCell(n + 3).value = 'Fin mission';
+  ws.getRow(4).getCell(n + 4).value = 'Latitude';
+  ws.getRow(4).getCell(n + 5).value = 'Longitude';
   ws.eachRow((row, i) => {
     if (i < 5) return;
     if (row.getCell(5).value === 'LAKOTA') { row.getCell(n + 2).value = '10/11/2026'; row.getCell(n + 3).value = '20/11/2026'; }
-    if (String(row.getCell(1).value).startsWith('CMS PALMCI')) row.getCell(n + 1).value = 'ESPC';
+    if (String(row.getCell(1).value).startsWith('CMS PALMCI')) { row.getCell(n + 1).value = 'ESPC'; row.getCell(n + 4).value = '5,8412'; row.getCell(n + 5).value = -5.3601; }
+    if (String(row.getCell(1).value).startsWith('CSR KAPELE')) { row.getCell(n + 4).value = 48.85; row.getCell(n + 5).value = 2.35; } // hors Côte d'Ivoire
   });
   const r = await request(app).post('/api/imports').set('Authorization', `Bearer ${admin}`)
     .attach('fichier', Buffer.from(await wb.xlsx.writeBuffer()), 'sans_etapes.xlsx');
@@ -192,4 +195,6 @@ test('fichier sans colonnes d\'étapes, avec catégorie et dates de mission', as
   assert.equal(d.categories.find((c) => c.categorie === 'A_CLASSER').sites, 12);
   const site = (await get('/api/sites?q=CMS%20PALMCI')).body.sites[0];
   assert.equal(site.categorie, 'ESPC');
+  assert.deepEqual([site.latitude, site.longitude], [5.8412, -5.3601]);
+  assert.match(r.body.avertissements.join('\n'), /CSR KAPELE : coordonnées GPS hors/);
 });

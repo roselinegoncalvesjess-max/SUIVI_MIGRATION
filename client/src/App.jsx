@@ -7,6 +7,7 @@ import Connexion from './pages/Connexion.jsx';
 import VueEnsemble from './pages/VueEnsemble.jsx';
 import Sites from './pages/Sites.jsx';
 import EquipeSI from './pages/EquipeSI.jsx';
+import Carte from './pages/Carte.jsx';
 import Historique from './pages/Historique.jsx';
 import Importer from './pages/Importer.jsx';
 import Administration from './pages/Administration.jsx';
@@ -78,6 +79,7 @@ function Cadre() {
           <NavLink to="/" end className={({ isActive }) => (isActive ? 'actif' : '')}>Vue d'ensemble</NavLink>
           <NavLink to="/sites" className={({ isActive }) => (isActive ? 'actif' : '')}>Sites</NavLink>
           <NavLink to="/equipe-si" className={({ isActive }) => (isActive ? 'actif' : '')}>Équipe SI</NavLink>
+          <NavLink to="/carte" className={({ isActive }) => (isActive ? 'actif' : '')}>Carte</NavLink>
           <NavLink to="/historique" className={({ isActive }) => (isActive ? 'actif' : '')}>Historique des imports</NavLink>
           {peut('admin') && <NavLink to="/administration" className={({ isActive }) => (isActive ? 'actif' : '')}>Administration</NavLink>}
         </nav>
@@ -87,6 +89,7 @@ function Cadre() {
           <Route path="/" element={<VueEnsemble />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/equipe-si" element={<EquipeSI />} />
+          <Route path="/carte" element={<Carte />} />
           <Route path="/historique" element={<Historique />} />
           <Route path="/importer" element={peut('contributeur') ? <Importer /> : <Navigate to="/" />} />
           <Route path="/administration" element={peut('admin') ? <Administration /> : <Navigate to="/" />} />

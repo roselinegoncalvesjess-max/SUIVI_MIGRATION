@@ -144,7 +144,7 @@ const SITES_COLONNES = `
   s.id, si.nom AS site, r.id AS region_id, r.nom AS region, d.id AS district_id, d.nom AS district, s.vague,
   s.type_site, s.categorie, s.responsable_libelle, s.responsable_id, m.nom_complet AS membre, s.statut,
   s.date_prevue, s.debut_reel, s.fin_reelle AS date_migration, s.debut_mission, s.fin_mission,
-  s.version_msupply, s.commentaires, s.difficultes`;
+  s.version_msupply, s.commentaires, s.difficultes, si.latitude::float AS latitude, si.longitude::float AS longitude`;
 
 export async function sites(importId, f = {}) {
   const cond = ['s.import_id = $1'];

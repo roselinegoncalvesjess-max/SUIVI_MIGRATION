@@ -25,6 +25,7 @@ const COLONNES = {
   'catégorie de site': 'categorie', 'catégorie': 'categorie', 'categorie': 'categorie',
   'date de migration': 'fin',
   'début mission': 'debutMission', 'date début mission': 'debutMission', 'date de début de la mission': 'debutMission',
+  'latitude': 'lat', 'longitude': 'lon', 'gps latitude': 'lat', 'gps longitude': 'lon',
   'fin mission': 'finMission', 'date fin mission': 'finMission', 'date de fin de la mission': 'finMission',
 };
 const OBLIGATOIRES = { site: 'Site', region: 'Région', district: 'District', statut: 'Statut' };
@@ -73,6 +74,13 @@ function entier(v) {
 /** « Nouveau site », « Nouveau déploiement »… → NOUVEAU ; tout le reste (ou vide) → MIGRATION. */
 export function typeSite(v) {
   return normaliser(texte(v)).startsWith('nouv') ? 'NOUVEAU' : 'MIGRATION';
+}
+
+/** Coordonnées GPS facultatives (degrés décimaux), retenues seulement si elles sont en Côte d'Ivoire. */
+function coordonnees(la, lo) {
+  const n = (v) => { const x = Number(String(brut(v) ?? '').replace(',', '.')); return brut(v) === null || brut(v) === '' || !Number.isFinite(x) ? null : x; };
+  const lat = n(la), lon = n(lo);
+  return lat !== null && lon !== null && lat > 4 && lat < 11 && lon > -9 && lon < -2 ? { lat, lon } : { lat: null, lon: null, gpsInvalide: lat !== null || lon !== null };
 }
 
 export function statut(v) {
@@ -140,6 +148,7 @@ export async function lireClasseur(buffer) {
       typeSite: typeSite(val(l, 'typeSite')),
       categorie: categorieSaisie(val(l, 'categorie')) || categorieDuNom(nom),
       debutMission: dateIso(val(l, 'debutMission')), finMission: dateIso(val(l, 'finMission')),
+      ...coordonnees(val(l, 'lat'), val(l, 'lon')),
       statut: statut(val(l, 'statut')).replace('NON_APPLICABLE', 'NON_DEMARRE'),
       commentaires: texte(val(l, 'commentaires')), difficultes: texte(val(l, 'difficultes')),
     });
@@ -163,6 +172,8 @@ export function controlerQualite(sites) {
       avert.push(`${s.site} : date de migration (${fr(s.fin)}) antérieure au début (${fr(s.debut)}).`);
     if (s.debutMission && s.finMission && s.finMission < s.debutMission)
       avert.push(`${s.site} : fin de mission (${fr(s.finMission)}) antérieure au début de mission (${fr(s.debutMission)}).`);
+    if (s.gpsInvalide)
+      avert.push(`${s.site} : coordonnées GPS hors de la Côte d'Ivoire ou illisibles (ignorées).`);
     if (s.categorie === 'A_CLASSER')
       avert.push(`${s.site} : catégorie non reconnue (ni ESPC, ni district sanitaire, ni hôpital de référence) ; renseignez la colonne « Catégorie de site ».`);
     if (s.typeSite === 'NOUVEAU' && s.version)
@@ -216,9 +227,11 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
         districts.set(cleD, rows[0].id);
       }
       const { rows: [site] } = await c.query(
-        `INSERT INTO site (nom, district_id) VALUES ($1, $2)
-         ON CONFLICT (nom) DO UPDATE SET district_id = EXCLUDED.district_id RETURNING id`,
-        [s.site, districts.get(cleD)]);
+        `INSERT INTO site (nom, district_id, latitude, longitude) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (nom) DO UPDATE SET district_id = EXCLUDED.district_id,
+           latitude = COALESCE(EXCLUDED.latitude, site.latitude), longitude = COALESCE(EXCLUDED.longitude, site.longitude)
+         RETURNING id`,
+        [s.site, districts.get(cleD), s.lat, s.lon]);
       if (s.typeSite === 'NOUVEAU') {
         nouveaux.total++;
         if (s.statut === 'TERMINE') nouveaux.deployes++;

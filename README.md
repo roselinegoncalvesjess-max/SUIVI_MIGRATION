@@ -23,6 +23,10 @@ de suivi de la Direction de l'Activité Pharmaceutique (DAP).
 - **Équipe SI** : participation **par district** : chaque membre est responsable de **tous les
   sites** des districts qui lui sont rattachés (districts affectés + districts où il est inscrit
   comme « Responsable ») ; taux de migration par membre et par district, vagues, tableau membre × vague.
+- **Carte** : districts sanitaires sur la carte de la Côte d'Ivoire (couleur = taux de migration, taille =
+  nombre de sites) et sites (couleur = statut) ; placement GPS si les colonnes « Latitude » / « Longitude »
+  sont renseignées, sinon autour du chef-lieu du district. Fond Natural Earth (domaine public), chefs-lieux
+  GeoNames (CC BY 4.0), sans service de tuiles en ligne.
 - **Historique** : chaque extrait importé, avec son taux, l'évolution et les incohérences relevées.
 - **Importer** (contributeurs) : dépôt d'un fichier .xlsx ; **contrôle qualité** automatique.
 - **Administration** (administrateurs) : objectifs nationaux (2 905 sites, 113 districts,
