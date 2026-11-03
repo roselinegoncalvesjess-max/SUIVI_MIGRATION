@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import * as Ic from './components/Icones.jsx';
 import { useAuth } from './auth.jsx';
 import { useTempsReel } from './tempsReel.js';
 import { api, fmtDateHeure } from './api.js';
@@ -46,11 +47,31 @@ export function Etat({ etat, children }) {
   return children(etat.donnees);
 }
 
+const MENU = [
+  { titre: 'Suivi', liens: [
+    { to: '/', libelle: 'Tableau de bord', Icone: Ic.IcTableau, couleur: '#5e72e4', end: true },
+    { to: '/sites', libelle: 'Sites', Icone: Ic.IcSites, couleur: '#fb6340' },
+    { to: '/carte', libelle: 'Carte', Icone: Ic.IcCarte, couleur: '#f5365c' },
+    { to: '/equipe-si', libelle: 'Équipe SI', Icone: Ic.IcEquipe, couleur: '#11cdef' },
+    { to: '/historique', libelle: 'Historique des imports', Icone: Ic.IcHistorique, couleur: '#2dce89' },
+  ] },
+  { titre: 'Gestion', liens: [
+    { to: '/importer', libelle: 'Importer un extrait', Icone: Ic.IcImport, couleur: '#ffb236', role: 'contributeur' },
+    { to: '/administration', libelle: 'Administration', Icone: Ic.IcAdmin, couleur: '#8965e0', role: 'admin' },
+  ] },
+];
+const TITRES = { '/': 'Tableau de bord', '/sites': 'Sites', '/carte': 'Carte', '/equipe-si': 'Équipe SI', '/historique': 'Historique des imports', '/importer': 'Importer un extrait', '/administration': 'Administration' };
+const initiales = (nom) => String(nom || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0].toUpperCase()).join('');
+
 function Cadre() {
   const { utilisateur, deconnexion, peut } = useAuth();
   const [revision, setRevision] = useState(0);
   const [toast, setToast] = useState('');
   const [dernier, setDernier] = useState(null);
+  const [menuOuvert, setMenuOuvert] = useState(false);
+  const [recherche, setRecherche] = useState('');
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const enDirect = useTempsReel((e) => {
     setRevision((r) => r + 1);
     setToast(e === 'import' ? 'Nouvel extrait importé : les chiffres sont à jour.' : 'Équipe SI mise à jour.');
@@ -59,43 +80,75 @@ function Cadre() {
   useEffect(() => {
     api('/historique').then((d) => setDernier(d.imports[0] || null)).catch(() => {});
   }, [revision]);
+  useEffect(() => { setMenuOuvert(false); }, [pathname]);
+
+  const chercher = (e) => {
+    e.preventDefault();
+    navigate(`/sites${recherche.trim() ? `?q=${encodeURIComponent(recherche.trim())}` : ''}`);
+  };
 
   return (
     <RevisionCtx.Provider value={revision}>
-      <header className="top">
-        <div className="top-row">
-          <div>
-            <h1>Migration mSupply → Open mSupply</h1>
-            <p>{dernier ? `Extrait du ${fmtDateHeure(dernier.genere_le)}${dernier.genere_par ? ` · généré par ${dernier.genere_par}` : ''} · importé le ${fmtDateHeure(dernier.importe_le)}` : 'Aucun extrait importé'}</p>
+      <div className={`app ${menuOuvert ? 'menu-ouvert' : ''}`}>
+        <aside className="sidenav" aria-label="Menu principal">
+          <div className="sidenav-logo">
+            <span className="logo-ic"><Ic.IcLogo width={22} height={22} /></span>
+            <span><b>Open mSupply</b><small>Suivi de la migration · LHSPLA</small></span>
           </div>
-          <div className="actions">
-            <span className={`en-direct ${enDirect ? 'on' : ''}`} title="Connexion temps réel"><i />{enDirect ? 'En direct' : 'Hors ligne'}</span>
-            {peut('contributeur') && <NavLink className="btn primaire" to="/importer">Importer un extrait</NavLink>}
-            <span className="sub" style={{ margin: 0 }}>{utilisateur.nom}</span>
-            <button className="btn" type="button" onClick={deconnexion}>Se déconnecter</button>
+          <nav>
+            {MENU.map((g) => {
+              const liens = g.liens.filter((l) => !l.role || peut(l.role));
+              if (!liens.length) return null;
+              return (
+                <div key={g.titre} className="sidenav-groupe">
+                  <h6>{g.titre}</h6>
+                  {liens.map(({ to, libelle, Icone, couleur, end }) => (
+                    <NavLink key={to} to={to} end={end} className={({ isActive }) => `sidenav-lien ${isActive ? 'actif' : ''}`}>
+                      <Icone style={{ color: couleur }} /><span>{libelle}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              );
+            })}
+          </nav>
+          <div className="sidenav-pied">
+            <span className={`en-direct ${enDirect ? 'on' : ''}`} title="Connexion temps réel"><i />{enDirect ? 'Données en direct' : 'Hors ligne'}</span>
+            {dernier && <small>Extrait du {fmtDateHeure(dernier.genere_le)}<br />importé le {fmtDateHeure(dernier.importe_le)}</small>}
           </div>
+        </aside>
+        <button className="voile" type="button" aria-label="Fermer le menu" onClick={() => setMenuOuvert(false)} />
+
+        <div className="principal">
+          <header className="bandeau">
+            <div className="bandeau-haut">
+              <button className="btn-menu" type="button" aria-label="Ouvrir le menu" onClick={() => setMenuOuvert(true)}><Ic.IcMenu /></button>
+              <h1>{TITRES[pathname] || 'Tableau de bord'}</h1>
+              <form className="recherche" onSubmit={chercher} role="search">
+                <Ic.IcRecherche />
+                <input type="search" placeholder="Rechercher un site, un district…" aria-label="Rechercher un site" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+              </form>
+              <div className="utilisateur">
+                <span className="avatar" aria-hidden="true">{initiales(utilisateur.nom)}</span>
+                <span className="nom">{utilisateur.nom}</span>
+                <button className="btn-sortie" type="button" onClick={deconnexion} title="Se déconnecter" aria-label="Se déconnecter"><Ic.IcSortie /></button>
+              </div>
+            </div>
+          </header>
+          <main className="contenu">
+            <Routes>
+              <Route path="/" element={<VueEnsemble />} />
+              <Route path="/sites" element={<Sites />} />
+              <Route path="/equipe-si" element={<EquipeSI />} />
+              <Route path="/carte" element={<Carte />} />
+              <Route path="/historique" element={<Historique />} />
+              <Route path="/importer" element={peut('contributeur') ? <Importer /> : <Navigate to="/" />} />
+              <Route path="/administration" element={peut('admin') ? <Administration /> : <Navigate to="/" />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+            <footer className="pied">© 2026 LHSPLA · Équipe Système d'information · Suivi de la migration mSupply → Open mSupply</footer>
+          </main>
         </div>
-        <nav className="tabs">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? 'actif' : '')}>Vue d'ensemble</NavLink>
-          <NavLink to="/sites" className={({ isActive }) => (isActive ? 'actif' : '')}>Sites</NavLink>
-          <NavLink to="/equipe-si" className={({ isActive }) => (isActive ? 'actif' : '')}>Équipe SI</NavLink>
-          <NavLink to="/carte" className={({ isActive }) => (isActive ? 'actif' : '')}>Carte</NavLink>
-          <NavLink to="/historique" className={({ isActive }) => (isActive ? 'actif' : '')}>Historique des imports</NavLink>
-          {peut('admin') && <NavLink to="/administration" className={({ isActive }) => (isActive ? 'actif' : '')}>Administration</NavLink>}
-        </nav>
-      </header>
-      <main>
-        <Routes>
-          <Route path="/" element={<VueEnsemble />} />
-          <Route path="/sites" element={<Sites />} />
-          <Route path="/equipe-si" element={<EquipeSI />} />
-          <Route path="/carte" element={<Carte />} />
-          <Route path="/historique" element={<Historique />} />
-          <Route path="/importer" element={peut('contributeur') ? <Importer /> : <Navigate to="/" />} />
-          <Route path="/administration" element={peut('admin') ? <Administration /> : <Navigate to="/" />} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </main>
+      </div>
       {toast && <div className="toast" role="status">{toast}</div>}
     </RevisionCtx.Provider>
   );

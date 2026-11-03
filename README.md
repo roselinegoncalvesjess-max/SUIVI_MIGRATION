@@ -11,6 +11,14 @@ de suivi de la Direction de l'Activité Pharmaceutique (DAP).
 | Base de données | **PostgreSQL 16** |
 | Déploiement | Docker Compose |
 
+## Interface
+
+Après la connexion : menu latéral blanc (Suivi / Gestion), bandeau bleu en dégradé avec le titre de la page,
+la recherche de sites et l'utilisateur connecté, puis des cartes blanches (mise en page inspirée d'« Argon
+Dashboard »). Le tableau de bord ouvre sur 4 cartes d'indicateurs, la courbe du rythme de migration
+(carte sombre, cumul ou par semaine) et l'histogramme des sites migrés par région. Sur tablette et
+téléphone, le menu devient un tiroir.
+
 ## Fonctionnalités
 
 - **Vue d'ensemble** : **taux de migration national** (sites migrés / 2 905 sites à migrer),

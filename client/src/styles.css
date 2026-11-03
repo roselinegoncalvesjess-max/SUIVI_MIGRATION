@@ -115,3 +115,117 @@ tbody tr.click:hover{background:var(--accent-soft)}
 .maplegend i{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none}
 .map-lbl{font-weight:600;fill:#0f1a1f;paint-order:stroke;stroke:#fff;pointer-events:none;font-family:var(--font)}
 .tip{position:fixed;pointer-events:none;background:#0f1a1f;color:#fff;padding:7px 10px;border-radius:7px;font-size:12px;line-height:1.4;z-index:50;max-width:280px}
+
+/* =====================================================================
+   Thème de l'interface principale (menu latéral + bandeau en dégradé),
+   inspiré de la mise en page « Argon Dashboard ».
+   ===================================================================== */
+:root{
+  --font:"Open Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --bg:#f8f9fe; --ink:#32325d; --ink-2:#525f7f; --muted:#8898aa; --line:#e9ecef; --line-2:#dee2e6;
+  --accent:#5e72e4; --accent-soft:#eef0fd;
+  --a-primaire:#5e72e4; --a-info:#11cdef; --a-succes:#2dce89; --a-danger:#f5365c; --a-alerte:#fb6340; --a-jaune:#ffd600; --a-sombre:#172b4d;
+  --ombre:0 0 2rem 0 rgba(136,152,170,.15); --ombre-forte:0 7px 14px rgba(50,50,93,.1),0 3px 6px rgba(0,0,0,.08);
+  --rayon:.375rem; --menu:250px;
+}
+body{background:var(--bg);color:var(--ink-2);font-family:var(--font)}
+.app{display:block;min-height:100vh}
+
+/* Menu latéral */
+.sidenav{position:fixed;inset:0 auto 0 0;width:var(--menu);background:#fff;box-shadow:0 0 2rem 0 rgba(136,152,170,.15);display:flex;flex-direction:column;z-index:30;overflow-y:auto}
+.sidenav-logo{display:flex;align-items:center;gap:10px;padding:22px 24px 18px;color:var(--ink)}
+.sidenav-logo .logo-ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:#fff;background:linear-gradient(87deg,#11cdef 0,#1171ef 100%);box-shadow:var(--ombre-forte)}
+.sidenav-logo b{display:block;font-size:16px;letter-spacing:-.01em;color:var(--a-primaire)}
+.sidenav-logo small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.sidenav nav{padding:4px 0}
+.sidenav-groupe{padding:6px 0 10px}
+.sidenav-groupe+ .sidenav-groupe{border-top:1px solid var(--line);margin-top:6px;padding-top:14px}
+.sidenav h6{margin:0 0 6px;padding:0 24px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sidenav-lien{display:flex;align-items:center;gap:14px;padding:10px 24px;margin:1px 10px 1px 0;color:var(--ink-2);text-decoration:none;font-size:14px;border-radius:0 6px 6px 0;position:relative}
+.sidenav-lien:hover{color:var(--ink);background:#f6f9fc}
+.sidenav-lien.actif{color:var(--ink);font-weight:600;background:#f6f9fc}
+.sidenav-lien.actif::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--a-primaire)}
+.sidenav-pied{margin-top:auto;padding:16px 24px 22px;border-top:1px solid var(--line);display:grid;gap:8px;font-size:12px;color:var(--muted)}
+.sidenav-pied .en-direct{justify-self:start}
+
+/* Zone principale */
+.principal{margin-left:var(--menu);min-width:0}
+.bandeau{background:linear-gradient(87deg,#11cdef 0,#1171ef 100%);padding:22px 32px 270px;color:#fff}
+.bandeau-haut{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.bandeau h1{font-size:13px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin:0;color:#fff}
+.recherche{margin-left:auto;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.45);border-radius:2rem;padding:7px 14px;width:min(320px,100%)}
+.recherche input{background:none;border:0;outline:0;color:#fff;font:14px var(--font);width:100%}
+.recherche input::placeholder{color:rgba(255,255,255,.8)}
+.recherche:focus-within{background:rgba(255,255,255,.22)}
+.utilisateur{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#1171ef;font-weight:700;font-size:13px;box-shadow:var(--ombre-forte)}
+.btn-sortie,.btn-menu{background:rgba(255,255,255,.15);border:0;color:#fff;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;cursor:pointer}
+.btn-sortie:hover,.btn-menu:hover{background:rgba(255,255,255,.28)}
+.btn-menu{display:none}
+.contenu{margin-top:-236px;padding:0 32px 24px;max-width:none;display:grid;gap:24px}
+.pied{font-size:12.5px;color:var(--muted);padding:12px 2px 0;border-top:1px solid var(--line)}
+
+/* Cartes (tous les anciens panneaux prennent le style « carte ») */
+.panel{background:#fff;border:0;border-radius:var(--rayon);box-shadow:var(--ombre);padding:20px 24px}
+.panel h2{font-size:17px;color:var(--ink);font-weight:600}
+.panel .sub,.sub{color:var(--muted)}
+.tablewrap{border:0;border-radius:0;margin:0 -24px;width:calc(100% + 48px)}
+th{background:#f6f9fc;color:#8898aa;text-transform:uppercase;font-size:10.5px;letter-spacing:.05em;border-bottom:1px solid var(--line);padding:11px 14px}
+td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink-2)}
+th:first-child,td:first-child{padding-left:24px} th:last-child,td:last-child{padding-right:24px}
+tr.region td{background:#f8f9fe}
+.btn{border-radius:var(--rayon);border:1px solid var(--line-2);font-weight:600;box-shadow:0 4px 6px rgba(50,50,93,.08),0 1px 3px rgba(0,0,0,.06);transition:transform .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn.primaire{background:var(--a-primaire);border-color:var(--a-primaire)}
+.chip{background:#eaecfb;color:var(--a-primaire)}
+.minibar span{background:var(--a-succes)}
+.filtres input,.filtres select,.form-ligne input,.form-ligne select{border:1px solid var(--line-2);border-radius:var(--rayon);box-shadow:0 1px 3px rgba(50,50,93,.15),0 1px 0 rgba(0,0,0,.02)}
+
+/* Cartes d'indicateurs (posées sur le bandeau) */
+.stat-cartes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px}
+.stat{background:#fff;border-radius:var(--rayon);box-shadow:var(--ombre);padding:18px 20px 16px;display:grid;gap:10px;min-width:0}
+.stat-haut{display:flex;justify-content:space-between;gap:12px}
+.stat h5{margin:0;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.stat .valeur{font-size:22px;font-weight:700;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+.stat .valeur small{font-size:13px;color:var(--muted);font-weight:600}
+.stat-ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:#fff;flex:none;box-shadow:var(--ombre-forte)}
+.stat-pied{font-size:13px;color:var(--muted);line-height:1.5}
+.stat-pied .hausse{color:var(--a-succes);font-weight:600;display:inline-flex;align-items:center;gap:2px}
+.stat-pied .baisse{color:var(--a-danger);font-weight:600;display:inline-flex;align-items:center;gap:2px}
+.grad-rouge{background:linear-gradient(87deg,#f5365c 0,#f56036 100%)}
+.grad-orange{background:linear-gradient(87deg,#fb6340 0,#fbb140 100%)}
+.grad-jaune{background:linear-gradient(87deg,#ffd600 0,#beff00 100%)}
+.grad-cyan{background:linear-gradient(87deg,#11cdef 0,#1171ef 100%)}
+.grad-vert{background:linear-gradient(87deg,#2dce89 0,#2dcecc 100%)}
+.grad-violet{background:linear-gradient(87deg,#8965e0 0,#bc65e0 100%)}
+
+/* Rangée de graphiques */
+.graphes{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:24px}
+.carte-sombre{background:var(--a-sombre);color:#fff;border-radius:var(--rayon);box-shadow:var(--ombre);padding:20px 24px}
+.carte-sombre .surtitre,.carte-blanche .surtitre{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:#8898aa;margin:0}
+.carte-sombre h3{margin:2px 0 0;font-size:19px;color:#fff;font-weight:600}
+.carte-blanche{background:#fff;border-radius:var(--rayon);box-shadow:var(--ombre);padding:20px 24px}
+.carte-blanche h3{margin:2px 0 0;font-size:19px;color:var(--ink);font-weight:600}
+.entete-graphe{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.bascule{display:flex;gap:6px}
+.bascule button{font:600 12.5px var(--font);border-radius:var(--rayon);padding:7px 14px;cursor:pointer;border:1px solid var(--a-primaire);background:#fff;color:var(--a-primaire)}
+.bascule button.actif{background:var(--a-primaire);color:#fff;box-shadow:0 4px 6px rgba(50,50,93,.2)}
+.carte-sombre .note{font-size:12px;color:#8898aa;margin-top:6px}
+
+/* Tablette et téléphone : le menu devient un tiroir */
+@media (max-width:1199px){.stat-cartes{grid-template-columns:repeat(2,minmax(0,1fr))}.graphes{grid-template-columns:1fr}}
+@media (max-width:991px){
+  .sidenav{transform:translateX(-100%);transition:transform .2s}
+  .app.menu-ouvert .sidenav{transform:none}
+  .principal{margin-left:0}
+  .btn-menu{display:grid}
+  .voile{display:none}
+  .app.menu-ouvert .voile{display:block;position:fixed;inset:0;background:rgba(23,43,77,.4);border:0;z-index:25}
+  .bandeau{padding:16px 16px 250px}
+  .contenu{margin-top:-226px}
+  .contenu{padding:0 16px 20px}
+  .recherche{order:5;width:100%;margin-left:0}
+}
+.voile{display:none}
+@media (max-width:575px){.stat-cartes{grid-template-columns:1fr}.utilisateur .nom{display:none}}
+@media (prefers-reduced-motion:reduce){.btn,.sidenav{transition:none}}

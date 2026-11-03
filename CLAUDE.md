@@ -90,6 +90,13 @@ npm run build
 cp .env.example .env && docker compose up -d --build   # http://localhost:8080
 ```
 
+## Interface
+
+Mise en page type « Argon Dashboard » : `App.jsx` (`Cadre` : menu latéral `MENU`, bandeau `.bandeau`,
+contenu `.contenu` remonté sur le bandeau), icônes SVG maison dans `components/Icones.jsx`, thème en fin de
+`styles.css` (variables `--a-*`, cartes `.panel`, `.stat`, `.carte-sombre`, `.carte-blanche`). Police Open Sans.
+Ne pas reprendre le logo ni le nom « argon ».
+
 ## Conventions
 
 - Textes de l'interface, messages d'erreur et commentaires en **français**, phrases courtes.

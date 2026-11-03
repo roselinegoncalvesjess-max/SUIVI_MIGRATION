@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import * as Ic from '../components/Icones.jsx';
 import { Etat, useDonnees } from '../App.jsx';
 import { fmtDate, fmtPct, fmtPeriode } from '../api.js';
 
@@ -17,24 +18,20 @@ function Contenu({ d }) {
   const navigate = useNavigate();
   return (
     <>
-      <div className="kpis">
-        <div className="kpi hero">
-          <div className="lab"><span className="dot T" /> Taux de migration national vers Open mSupply</div>
-          <div className="val num">{fmtPct(s.taux_national)} <small>· {fmtN(s.migres)} sites migrés sur {fmtN(s.objectif_sites)}</small></div>
-          <div className="bar"><span className="T" style={{ width: `${s.taux_national}%` }} /></div>
-          <div className="foot">
-            {s.evolution === null ? 'Premier import enregistré' : `${s.evolution >= 0 ? '+' : ''}${s.evolution} sites migrés depuis l'import précédent`}
-            {' · '}Sites à migrer suivis dans l'extrait : {fmtN(s.sites)} ({fmtPct(s.taux)} migrés)
-            {s.nouveaux > 0 && <> · <b>{fmtN(s.sites_open_msupply)}</b> sites au total sur Open mSupply (migrés + nouveaux)</>}
-          </div>
-        </div>
-        <div className="kpi"><div className="lab">Sites restant à migrer</div><div className="val num">{fmtN(s.sites_restants)}</div><div className="foot">dont {fmtN(s.sites_hors_extrait)} pas encore dans l'extrait</div></div>
-        <div className="kpi"><div className="lab">Régions</div><div className="val num">{s.regions_touchees} <small>/ {s.objectif_regions}</small></div><div className="foot">avec au moins un site migré · {s.regions_completes} complètes dans l'extrait</div></div>
-        <div className="kpi"><div className="lab">Districts</div><div className="val num">{s.districts_touches} <small>/ {s.objectif_districts}</small></div><div className="foot">avec au moins un site migré · {s.districts_complets} complets dans l'extrait</div></div>
-        <div className="kpi nouveau"><div className="lab"><span className="dot nv" /> Nouveaux sites</div>
-          <div className="val num">{s.nouveaux_deployes} <small>/ {s.objectif_nouveaux || s.nouveaux}</small></div>
-          <div className="foot">{s.nouveaux || s.objectif_nouveaux ? `déployés directement sur Open mSupply · ${s.nouveaux_en_cours} en cours` : 'aucun nouveau site dans l\'extrait (colonne « Type de site »)'}</div></div>
-        <div className="kpi"><div className="lab"><span className="dot C" /> En cours</div><div className="val num">{s.en_cours}</div><div className="foot">{s.non_demarres} non démarrés · {s.en_retard} en retard</div></div>
+      <div className="stat-cartes">
+        <CarteStat titre="Taux de migration national" valeur={fmtPct(s.taux_national)} Icone={Ic.IcCible} fond="grad-rouge"
+          pied={<><Variation n={s.evolution} /> {fmtN(s.migres)} sites migrés sur {fmtN(s.objectif_sites)}</>} />
+        <CarteStat titre="Sites migrés" valeur={<>{fmtN(s.migres)} <small>/ {fmtN(s.sites)} suivis</small></>} Icone={Ic.IcValide} fond="grad-orange"
+          pied={<>{fmtPct(s.taux)} des sites de l'extrait · {fmtN(s.sites_restants)} restent à migrer</>} />
+        <CarteStat titre="Districts" valeur={<>{s.districts_touches} <small>/ {s.objectif_districts}</small></>} Icone={Ic.IcDistrict} fond="grad-jaune"
+          pied={<><span className="hausse">{s.districts_complets}</span> entièrement migrés · {s.regions_touchees} régions sur {s.objectif_regions}</>} />
+        <CarteStat titre="Nouveaux sites" valeur={<>{s.nouveaux_deployes} <small>/ {s.objectif_nouveaux || s.nouveaux}</small></>} Icone={Ic.IcNouveau} fond="grad-cyan"
+          pied={s.nouveaux || s.objectif_nouveaux ? <><Variation n={s.evolution_nouveaux} /> déployés directement sur Open mSupply</> : <>Aucun dans l'extrait · {s.en_cours} migrations en cours</>} />
+      </div>
+
+      <div className="graphes">
+        <GrapheRythme rythme={d.rythme} total={s.sites} />
+        <GrapheRegions regions={d.regions} />
       </div>
 
       <RegionsDistricts regions={d.regions} total={s} />
@@ -42,11 +39,6 @@ function Contenu({ d }) {
       <NouveauxSites />
 
       <div className="grid2">
-        <section className="panel">
-          <h2>Rythme de migration</h2>
-          <p className="sub">Cumul des sites migrés à leur date de migration, comparé au planning (date prévue)</p>
-          <Rythme rythme={d.rythme} total={s.sites} />
-        </section>
         <section className="panel">
           <h2>Répartition par catégorie de site</h2>
           <p className="sub">ESPC (CSR, DR, CSI, CSU, FSU, CAT, ONG, DM), districts sanitaires (DS) et hôpitaux de référence (HG, EPHD, CHU, CHR), d'après le nom du site</p>
@@ -217,6 +209,95 @@ function Missions({ missions }) {
         ))}</tbody>
       </table></div>
       <p className="sub" style={{ marginTop: 8 }}>* dates calculées à partir des sites (pas de dates de mission saisies).</p>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------- en-tête du tableau de bord */
+function CarteStat({ titre, valeur, Icone, fond, pied }) {
+  return (
+    <div className="stat">
+      <div className="stat-haut">
+        <div><h5>{titre}</h5><div className="valeur">{valeur}</div></div>
+        <span className={`stat-ic ${fond}`}><Icone /></span>
+      </div>
+      <div className="stat-pied">{pied}</div>
+    </div>
+  );
+}
+
+function Variation({ n }) {
+  if (n === null || n === undefined) return <span>Premier import ·</span>;
+  if (n >= 0) return <span className="hausse"><Ic.IcHaut width={13} height={13} />+{n}</span>;
+  return <span className="baisse"><Ic.IcBas width={13} height={13} />{n}</span>;
+}
+
+/** Lundi de la semaine d'une date « AAAA-MM-JJ » */
+function lundi(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+function GrapheRythme({ rythme, total }) {
+  const [mode, setMode] = useState('cumul');
+  const donnees = useMemo(() => {
+    if (mode === 'cumul') {
+      const dates = [...new Set([...rythme.reel, ...rythme.prevu].map((p) => p.date))].sort();
+      const R = new Map(rythme.reel.map((x) => [x.date, x.cumul]));
+      const P = new Map(rythme.prevu.map((x) => [x.date, x.cumul]));
+      let r = 0; let p = 0;
+      return dates.map((date) => { if (R.has(date)) r = R.get(date); if (P.has(date)) p = P.get(date); return { date, reel: r, prevu: p }; });
+    }
+    // Sites migrés par semaine (à partir du cumul quotidien)
+    const sem = new Map();
+    let prec = 0;
+    rythme.reel.forEach((x) => { const k = lundi(x.date); sem.set(k, (sem.get(k) || 0) + x.cumul - prec); prec = x.cumul; });
+    return [...sem].sort().map(([date, n]) => ({ date, reel: n }));
+  }, [rythme, mode]);
+  const axe = { stroke: '#525f7f', tick: { fill: '#8898aa', fontSize: 11 }, tickLine: false, axisLine: false };
+  return (
+    <section className="carte-sombre">
+      <div className="entete-graphe">
+        <div><p className="surtitre">Vue d'ensemble</p><h3>Rythme de migration</h3></div>
+        <div className="bascule" role="group" aria-label="Affichage">
+          <button type="button" className={mode === 'cumul' ? 'actif' : ''} onClick={() => setMode('cumul')}>Cumul</button>
+          <button type="button" className={mode === 'semaine' ? 'actif' : ''} onClick={() => setMode('semaine')}>Par semaine</button>
+        </div>
+      </div>
+      {donnees.length === 0 ? <p className="note">Pas encore de dates de migration.</p> : (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={donnees} margin={{ top: 10, right: 12, bottom: 0, left: -10 }}>
+            <CartesianGrid stroke="#2a3f63" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="date" {...axe} tickFormatter={(v) => fmtDate(v).slice(0, 5)} minTickGap={28} />
+            <YAxis {...axe} allowDecimals={false} domain={mode === 'cumul' ? [0, Math.ceil(total / 100) * 100] : [0, 'auto']} />
+            <Tooltip contentStyle={{ background: '#fff', border: 0, borderRadius: 6, color: '#32325d' }} labelFormatter={(v) => (mode === 'cumul' ? fmtDate(v) : `Semaine du ${fmtDate(v)}`)}
+              formatter={(v, n) => [v, n === 'reel' ? (mode === 'cumul' ? 'Sites migrés (cumul)' : 'Sites migrés') : 'Prévus (cumul)']} />
+            {mode === 'cumul' && <Line type="monotone" dataKey="prevu" stroke="#8898aa" strokeDasharray="5 5" strokeWidth={2} dot={false} />}
+            <Line type="monotone" dataKey="reel" stroke="#5e72e4" strokeWidth={4} dot={false} activeDot={{ r: 5, fill: '#fff', stroke: '#5e72e4', strokeWidth: 2 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+      <p className="note">{mode === 'cumul' ? 'Trait plein : sites migrés à leur date de migration · pointillés : planning (dates prévues)' : 'Nombre de sites migrés chaque semaine (date de migration)'}</p>
+    </section>
+  );
+}
+
+function GrapheRegions({ regions }) {
+  const navigate = useNavigate();
+  const donnees = regions.filter((r) => r.sites > 0).slice(0, 8).map((r) => ({ id: r.id, nom: r.nom, migres: r.migres, sites: r.sites, taux: r.taux }));
+  return (
+    <section className="carte-blanche">
+      <div className="entete-graphe"><div><p className="surtitre">Avancement</p><h3>Sites migrés par région</h3></div></div>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={donnees} margin={{ top: 10, right: 6, bottom: 0, left: -18 }}>
+          <CartesianGrid stroke="#e9ecef" strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="nom" tick={{ fill: '#8898aa', fontSize: 10 }} tickLine={false} axisLine={false} interval={0} angle={-30} textAnchor="end" height={60} />
+          <YAxis tick={{ fill: '#8898aa', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+          <Tooltip cursor={{ fill: '#f6f9fc' }} formatter={(v, n, p) => [`${v} sur ${p.payload.sites} (${fmtPct(p.payload.taux)})`, 'Sites migrés']} />
+          <Bar dataKey="migres" fill="#fb6340" radius={[4, 4, 0, 0]} barSize={12} style={{ cursor: 'pointer' }} onClick={(x) => navigate(`/sites?region=${x.id}`)} />
+        </BarChart>
+      </ResponsiveContainer>
     </section>
   );
 }
