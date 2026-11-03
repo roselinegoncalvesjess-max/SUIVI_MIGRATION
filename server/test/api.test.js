@@ -57,7 +57,12 @@ test('tableau de bord : taux, régions et districts', async () => {
   assert.deepEqual([belier.sites, belier.migres, belier.taux], [121, 116, 95.9]);
   const k1 = r.body.regions.flatMap((x) => x.districts).find((d) => d.nom === 'KORHOGO 1');
   assert.equal(k1.complet, true);
-  assert.equal(r.body.etapes.length, 9);
+  // Catégories déduites du nom des sites
+  const cat = Object.fromEntries(r.body.categories.map((c) => [c.categorie, c.sites]));
+  assert.deepEqual(cat, { ESPC: 332, DISTRICT_SANITAIRE: 13, HOPITAL_REFERENCE: 21, A_CLASSER: 13 });
+  // Période de migration de Korhogo 2 (vague 1) : du premier début réel à la dernière date de migration
+  const k2 = r.body.missions.find((m) => m.district === 'KORHOGO 2' && m.vague === 1);
+  assert.deepEqual([k2.debut, k2.fin, k2.duree_jours, k2.migres, k2.terminee], ['2026-10-26', '2026-10-29', 4, 16, true]);
 });
 
 test('équipe SI : tous les sites des districts de chaque membre', async () => {
@@ -98,8 +103,10 @@ test('objectifs nationaux modifiables par un administrateur', async () => {
 test('filtres de la liste des sites', async () => {
   assert.equal((await get('/api/sites?statut=EN_COURS')).body.sites.length, 15);
   assert.equal((await get('/api/sites?q=korhogo')).body.sites.length, 69);
-  const site = (await get('/api/sites?q=BEVOGO')).body.sites[0];
-  assert.equal(site.etapes.length, 9);
+  const site = (await get('/api/sites?q=KAPELE')).body.sites[0];
+  assert.equal(site.categorie, 'ESPC');
+  assert.equal(site.date_migration, '2026-10-28');
+  assert.equal((await get('/api/sites?categorie=HOPITAL_REFERENCE')).body.sites.length, 21);
 });
 
 test('droits : un lecteur ne peut pas importer ni gérer l\'équipe', async () => {
@@ -158,4 +165,31 @@ test('nouveaux sites : colonne « Type de site » comptée à part', async () =>
   assert.equal((await get('/api/sites?type=NOUVEAU')).body.sites.length, 3);
   const divoD = (await get('/api/tableau-de-bord')).body.regions.flatMap((x) => x.districts).find((d) => d.nom === 'DIVO');
   assert.deepEqual([divoD.sites, divoD.nouveaux], [41, 1]);
+});
+
+test('fichier sans colonnes d\'étapes, avec catégorie et dates de mission', async () => {
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await readFile(EXTRAIT));
+  const ws = wb.getWorksheet('Sites');
+  ws.spliceColumns(15, 9); // retire les 9 colonnes d'étapes
+  const n = ws.getRow(4).cellCount;
+  ws.getRow(4).getCell(n + 1).value = 'Catégorie de site';
+  ws.getRow(4).getCell(n + 2).value = 'Début mission';
+  ws.getRow(4).getCell(n + 3).value = 'Fin mission';
+  ws.eachRow((row, i) => {
+    if (i < 5) return;
+    if (row.getCell(5).value === 'LAKOTA') { row.getCell(n + 2).value = '10/11/2026'; row.getCell(n + 3).value = '20/11/2026'; }
+    if (String(row.getCell(1).value).startsWith('CMS PALMCI')) row.getCell(n + 1).value = 'ESPC';
+  });
+  const r = await request(app).post('/api/imports').set('Authorization', `Bearer ${admin}`)
+    .attach('fichier', Buffer.from(await wb.xlsx.writeBuffer()), 'sans_etapes.xlsx');
+  assert.equal(r.status, 201, r.body.erreur);
+  assert.equal(r.body.import.nb_termines, 221);
+  const d = (await get('/api/tableau-de-bord')).body;
+  const lakota = d.missions.find((m) => m.district === 'LAKOTA');
+  assert.deepEqual([lakota.debut, lakota.fin, lakota.duree_jours, lakota.dates_saisies], ['2026-11-10', '2026-11-20', 11, true]);
+  assert.equal(d.categories.find((c) => c.categorie === 'A_CLASSER').sites, 12);
+  const site = (await get('/api/sites?q=CMS%20PALMCI')).body.sites[0];
+  assert.equal(site.categorie, 'ESPC');
 });

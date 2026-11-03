@@ -2,10 +2,10 @@ import { Fragment, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Etat, useDonnees } from '../App.jsx';
-import { fmtDate, fmtPct } from '../api.js';
+import { fmtDate, fmtPct, fmtPeriode } from '../api.js';
 
 const fmtN = (n) => Number(n).toLocaleString('fr-FR');
-import { Statut, Taux } from '../components/Elements.jsx';
+import { Categorie, Statut, Taux } from '../components/Elements.jsx';
 
 export default function VueEnsemble() {
   const etat = useDonnees('/tableau-de-bord');
@@ -14,6 +14,7 @@ export default function VueEnsemble() {
 
 function Contenu({ d }) {
   const s = d.synthese;
+  const navigate = useNavigate();
   return (
     <>
       <div className="kpis">
@@ -43,20 +44,26 @@ function Contenu({ d }) {
       <div className="grid2">
         <section className="panel">
           <h2>Rythme de migration</h2>
-          <p className="sub">Cumul des sites migrés (fin réelle) comparé au planning (date prévue)</p>
+          <p className="sub">Cumul des sites migrés à leur date de migration, comparé au planning (date prévue)</p>
           <Rythme rythme={d.rythme} total={s.sites} />
         </section>
         <section className="panel">
-          <h2>Progression par étape</h2>
-          <p className="sub">Sites ayant terminé chaque étape</p>
+          <h2>Répartition par catégorie de site</h2>
+          <p className="sub">ESPC (CSR, DR, CSI, CSU, FSU, CAT, ONG, DM), districts sanitaires (DS) et hôpitaux de référence (HG, EPHD, CHU, CHR), d'après le nom du site</p>
           <div className="tablewrap"><table>
-            <thead><tr><th>Étape</th><th className="r">Terminé</th><th className="r">En cours</th><th>Taux</th></tr></thead>
-            <tbody>{d.etapes.map((e) => (
-              <tr key={e.ordre}><td>{e.ordre}. {e.libelle}</td><td className="r num">{e.termines}</td><td className="r num">{e.en_cours}</td><td><Taux valeur={e.taux} /></td></tr>
+            <thead><tr><th>Catégorie</th><th className="r">Sites à migrer</th><th className="r">Migrés</th><th>Taux de migration</th><th className="r">En cours</th><th className="r">Non démarrés</th><th className="r">Nouveaux</th></tr></thead>
+            <tbody>{d.categories.map((c) => (
+              <tr key={c.categorie} className="click" onClick={() => navigate(`/sites?categorie=${c.categorie}`)}>
+                <td><Categorie categorie={c.categorie} /></td><td className="r num">{c.sites}</td><td className="r num">{c.migres}</td>
+                <td><Taux valeur={c.taux} complet={c.complet} /></td><td className="r num">{c.en_cours}</td><td className="r num">{c.non_demarres}</td>
+                <td className="r num">{c.nouveaux || '—'}</td></tr>
             ))}</tbody>
           </table></div>
+          {d.categories.some((c) => c.categorie === 'A_CLASSER') && <p className="sub" style={{ marginTop: 8 }}>« À classer » : aucun sigle reconnu dans le nom ; renseignez la colonne « Catégorie de site » du fichier Excel.</p>}
         </section>
       </div>
+
+      <Missions missions={d.missions} />
 
       <div className="grid2">
         <section className="panel">
@@ -101,7 +108,7 @@ function RegionsDistricts({ regions, total }) {
         </div>
       </div>
       <div className="tablewrap"><table>
-        <thead><tr><th>Région / district</th><th className="r">Sites à migrer</th><th className="r">Sites migrés</th><th>Taux de migration</th><th className="r">En cours</th><th className="r">Non démarrés</th><th className="r">Nouveaux sites<br /><span style={{ fontWeight: 400 }}>déployés / total</span></th></tr></thead>
+        <thead><tr><th>Région / district</th><th className="r">Sites à migrer</th><th className="r">Sites migrés</th><th>Taux de migration</th><th className="r">En cours</th><th className="r">Non démarrés</th><th className="r">Nouveaux sites<br /><span style={{ fontWeight: 400 }}>déployés / total</span></th><th>Période de migration<br /><span style={{ fontWeight: 400 }}>début → fin de mission</span></th></tr></thead>
         <tbody>
           {regions.map((r) => (
             <Fragment key={r.id}>
@@ -111,6 +118,7 @@ function RegionsDistricts({ regions, total }) {
                 <td><Taux valeur={r.taux} complet={r.complet} gras /></td>
                 <td className="r num">{r.en_cours}</td><td className="r num">{r.non_demarres}</td>
                 <td className="r num">{r.nouveaux ? `${r.nouveaux_deployes} / ${r.nouveaux}` : '—'}</td>
+                <td />
               </tr>
               {ouvertes.has(r.id) && r.districts.map((d) => (
                 <tr className="district" key={d.id}>
@@ -119,11 +127,12 @@ function RegionsDistricts({ regions, total }) {
                   <td><Taux valeur={d.taux} complet={d.complet} /></td>
                   <td className="r num">{d.en_cours}</td><td className="r num">{d.non_demarres}</td>
                   <td className="r num">{d.nouveaux ? `${d.nouveaux_deployes} / ${d.nouveaux}` : '—'}</td>
+                  <td className="num">{fmtPeriode(d.debut_mission, d.fin_mission)}</td>
                 </tr>
               ))}
             </Fragment>
           ))}
-          <tr className="total"><td>Total</td><td className="r num">{total.sites}</td><td className="r num">{total.migres}</td><td>{fmtPct(total.taux)}</td><td className="r num">{total.en_cours}</td><td className="r num">{total.non_demarres}</td><td className="r num">{total.nouveaux ? `${total.nouveaux_deployes} / ${total.nouveaux}` : '—'}</td></tr>
+          <tr className="total"><td>Total</td><td className="r num">{total.sites}</td><td className="r num">{total.migres}</td><td>{fmtPct(total.taux)}</td><td className="r num">{total.en_cours}</td><td className="r num">{total.non_demarres}</td><td className="r num">{total.nouveaux ? `${total.nouveaux_deployes} / ${total.nouveaux}` : '—'}</td><td /></tr>
         </tbody>
       </table></div>
     </section>
@@ -178,13 +187,36 @@ function NouveauxSites() {
         <div className="info">Aucun nouveau site dans le dernier extrait. Renseignez « Nouveau site » dans la colonne « Type de site » du fichier Excel pour les faire apparaître ici.</div>
       ) : (
         <div className="tablewrap" style={{ maxHeight: 360, overflow: 'auto' }}><table>
-          <thead><tr><th>Site</th><th>Région</th><th>District</th><th>Vague</th><th>Responsable</th><th>Statut</th><th>Prévu le</th><th>Déployé le</th></tr></thead>
+          <thead><tr><th>Site</th><th>Région</th><th>District</th><th>Vague</th><th>Responsable</th><th>Statut</th><th>Prévu le</th><th>Date de déploiement</th></tr></thead>
           <tbody>{liste.map((x) => (
             <tr key={x.id}><td>{x.site}</td><td>{x.region}</td><td>{x.district}</td><td className="num">{x.vague ?? '—'}</td><td>{x.responsable_libelle || '—'}</td>
-              <td><Statut statut={x.statut} /></td><td className="num">{fmtDate(x.date_prevue)}</td><td className="num">{fmtDate(x.fin_reelle)}</td></tr>
+              <td><Statut statut={x.statut} /></td><td className="num">{fmtDate(x.date_prevue)}</td><td className="num">{fmtDate(x.date_migration)}</td></tr>
           ))}</tbody>
         </table></div>
       )}
+    </section>
+  );
+}
+
+function Missions({ missions }) {
+  const navigate = useNavigate();
+  return (
+    <section className="panel">
+      <h2>Périodes de migration (missions)</h2>
+      <p className="sub">Une mission par district et par vague : du début à la fin de la mission. Dates saisies dans le fichier Excel (« Début mission », « Fin mission ») ou, à défaut, premier début réel et dernière date de migration des sites du district.</p>
+      <div className="tablewrap" style={{ maxHeight: 420, overflow: 'auto' }}><table>
+        <thead><tr><th>Région</th><th>District</th><th>Vague</th><th>Début de mission</th><th>Fin de mission</th><th className="r">Durée</th><th className="r">Sites à migrer</th><th className="r">Migrés</th><th>Taux</th><th>État</th></tr></thead>
+        <tbody>{missions.map((m) => (
+          <tr key={`${m.district_id}-${m.vague}`} className="click" onClick={() => navigate(`/sites?district=${m.district_id}${m.vague !== null ? `&vague=${m.vague}` : ''}`)}>
+            <td>{m.region}</td><td>{m.district}</td><td><span className="chip">Vague {m.vague ?? '—'}</span></td>
+            <td className="num">{fmtDate(m.debut)}</td><td className="num">{fmtDate(m.fin)}{m.dates_saisies ? '' : m.debut ? <span className="sub" title="Calculée à partir des dates des sites"> *</span> : ''}</td>
+            <td className="r num">{m.duree_jours ? `${m.duree_jours} j` : '—'}</td>
+            <td className="r num">{m.sites}</td><td className="r num">{m.migres}</td><td><Taux valeur={m.taux} complet={m.complet} /></td>
+            <td>{m.terminee ? <span className="pill"><span className="dot T" />Terminée</span> : m.debut ? <span className="pill"><span className="dot C" />En cours</span> : <span className="pill"><span className="dot N" />À planifier</span>}</td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+      <p className="sub" style={{ marginTop: 8 }}>* dates calculées à partir des sites (pas de dates de mission saisies).</p>
     </section>
   );
 }

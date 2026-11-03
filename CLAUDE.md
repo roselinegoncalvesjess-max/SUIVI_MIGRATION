@@ -8,13 +8,19 @@ Ce fichier donne à Claude Code le contexte du projet. Répondre et commenter le
   dans **113 districts** et **33 régions** (valeurs dans la table `parametre`, modifiables).
 - Source des données : extrait Excel de l'application de suivi de la **DAP** (Direction de
   l'Activité Pharmaceutique), feuille « Sites ». Chaque import est conservé (historique).
-- 9 étapes de migration (table `etape`) : Planification → … → Clôture / stabilisation.
-- Statuts : `TERMINE`, `EN_COURS`, `NON_DEMARRE`.
+- **Les étapes de migration ne sont PAS suivies** (tables supprimées par `004_…sql`) : un site est migré quand
+  son statut est `TERMINE`. Statuts : `TERMINE`, `EN_COURS`, `NON_DEMARRE`.
+- **Date de migration** d'un site = `suivi_site.fin_reelle` (colonne Excel « Fin réelle »).
+- **Catégorie de site** (`categorie_site`) déduite du sigle du nom (`server/src/services/categories.js`) :
+  ESPC (CSR, DR, CSI, CSU, FSU, CAT, ONG, DM, + CSUS), DISTRICT_SANITAIRE (DS, « District sanitaire »),
+  HOPITAL_REFERENCE (HG, EPHD, CHU, CHR, + « Hôpital général ») ; sinon A_CLASSER. La colonne Excel
+  « Catégorie de site » l'emporte.
+- **Période de migration** = mission par district et par vague : « Début mission » / « Fin mission » (Excel ou
+  affectation), sinon MIN(debut_reel) et MAX(fin_reelle des sites terminés).
 - **Taux de migration national** = sites `TERMINE` **de type MIGRATION** du dernier import / `objectif_sites`.
 - **Nouveaux sites** : colonne Excel « Type de site » = « Nouveau site » → `suivi_site.type_site = 'NOUVEAU'`
   (déploiement direct sur Open mSupply). Comptés à part (`nouveaux`, `nouveaux_deployes`) ; toutes les
   statistiques « sites / migres / en_cours / non_demarres » ne portent que sur `MIGRATION`.
-  Étape « Non applicable » → `NON_APPLICABLE` (ex. étape 3 pour un nouveau site).
 - Alimentation : fichier Excel au format de `docs/Modele_alimentation_suivi_migration.xlsx`
   (colonnes reconnues par leur nom ; feuille « Sites »).
 
@@ -34,7 +40,8 @@ GONCALVES JESSICA, TEKI JOEL ACHI FABIEN, SIE AMAN NINA, GUEI CHRISTIAN RICHARD 
 - Les **codes de district ne sont pas fiables** (DIST-011 et DIST-012 servent pour deux districts
   chacun) : un district est identifié par **nom + région**, jamais par son code.
 - Les dates sont des textes « JJ/MM/AAAA » ; l'en-tête du tableau est en ligne 4 et une ligne
-  « Généré le … par … » le précède.
+  « Généré le … par … » le précède. Les colonnes d'étapes, « Avancement % » et « Étape en cours » de
+  l'export DAP sont ignorées.
 - « RAS » dans la colonne Difficultés signifie « rien à signaler ».
 
 ## Architecture

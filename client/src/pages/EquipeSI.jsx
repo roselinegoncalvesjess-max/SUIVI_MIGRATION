@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Etat, useDonnees } from '../App.jsx';
-import { fmtPct } from '../api.js';
+import { fmtPct, fmtPeriode } from '../api.js';
 import { Taux } from '../components/Elements.jsx';
 
 export default function EquipeSI() {
@@ -56,7 +56,7 @@ function Contenu({ d }) {
         <h2>Districts pris en charge par chaque membre</h2>
         <p className="sub">Tous les sites du district comptent, quel que soit le responsable inscrit pour chaque site. Cliquez un district pour voir ses sites.</p>
         <div className="tablewrap"><table>
-          <thead><tr><th>Membre</th><th>District</th><th>Région</th><th>Rattachement</th><th>Vague</th><th className="r">Sites</th><th className="r">Migrés</th><th>Taux de migration</th><th className="r">En cours</th><th className="r">Non démarrés</th></tr></thead>
+          <thead><tr><th>Membre</th><th>District</th><th>Région</th><th>Rattachement</th><th>Vague</th><th>Période de mission</th><th className="r">Sites</th><th className="r">Migrés</th><th>Taux de migration</th><th className="r">En cours</th><th className="r">Non démarrés</th></tr></thead>
           <tbody>
             {membres.flatMap((m) => m.districts.map((x, i) => (
               <tr key={`${m.id}-${x.id}`}>
@@ -65,6 +65,7 @@ function Contenu({ d }) {
                 <td>{x.region}</td>
                 <td className="sub" style={{ margin: 0 }}>{x.origines.map((o) => ORIGINE[o]).join(', ')}</td>
                 <td>{x.vagues_participation.map((v) => <span key={v} className="chip" style={{ marginRight: 4 }}>Vague {v}</span>)}</td>
+                <td className="num">{fmtPeriode(x.debut_mission, x.fin_mission)}</td>
                 <td className="r num">{x.sites}</td><td className="r num">{x.migres}</td>
                 <td><Taux valeur={x.taux} complet={x.complet} /></td>
                 <td className="r num">{x.en_cours}</td><td className="r num">{x.non_demarres}</td>

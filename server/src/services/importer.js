@@ -1,15 +1,17 @@
 /**
  * Import d'un extrait Excel de l'application de suivi de la DAP.
  *
- * Fichier attendu (feuille « Sites ») :
+ * Fichier attendu (feuille « Sites ») — les colonnes d'étapes éventuelles sont ignorées :
  *  - une ligne « Généré le JJ/MM/AAAA à HH:MM par Prénom Nom » au-dessus du tableau ;
  *  - une ligne d'en-tête contenant au moins Site, Région, District, Statut ;
- *  - les 9 colonnes d'étapes dont le libellé commence par « 1. » … « 9. ».
+ *  - facultatif : « Catégorie de site », « Début mission », « Fin mission ».
+ * La « Fin réelle » est la DATE DE MIGRATION du site.
  * L'import est atomique : en cas d'erreur, rien n'est enregistré.
  */
 import ExcelJS from 'exceljs';
 import { transaction } from '../db.js';
 import { Rapprochement, normaliser } from './membres.js';
+import { categorieDuNom, categorieSaisie } from './categories.js';
 
 export class ErreurImport extends Error {}
 
@@ -20,6 +22,10 @@ const COLONNES = {
   'avancement %': 'avancement', 'étape en cours': 'etape', 'commentaires': 'commentaires',
   'difficultés': 'difficultes',
   'type de site': 'typeSite', 'type': 'typeSite', 'type de déploiement': 'typeSite',
+  'catégorie de site': 'categorie', 'catégorie': 'categorie', 'categorie': 'categorie',
+  'date de migration': 'fin',
+  'début mission': 'debutMission', 'date début mission': 'debutMission', 'date de début de la mission': 'debutMission',
+  'fin mission': 'finMission', 'date fin mission': 'finMission', 'date de fin de la mission': 'finMission',
 };
 const OBLIGATOIRES = { site: 'Site', region: 'Région', district: 'District', statut: 'Statut' };
 const RE_GENERE = /G[ée]n[ée]r[ée] le\s+(\d{2}\/\d{2}\/\d{4})(?:\s+à\s+(\d{1,2}:\d{2}))?(?:\s+par\s+(.+))?/i;
@@ -102,17 +108,12 @@ export async function lireClasseur(buffer) {
   if (entete < 0) throw new ErreurImport(`Ligne d'en-tête introuvable (colonnes « Site » et « Statut ») dans la feuille « ${ws.name} ».`);
 
   const index = {};
-  const etapes = {};
   lignes[entete].forEach((c, i) => {
-    const lib = texte(c);
-    const cle = COLONNES[lib.toLowerCase()];
-    if (cle) index[cle] = i;
-    const m = lib.match(/^(\d)\.\s*(.+)$/);
-    if (m) etapes[+m[1]] = i;
+    const cle = COLONNES[texte(c).toLowerCase()];
+    if (cle && index[cle] === undefined) index[cle] = i;
   });
   const manquantes = Object.entries(OBLIGATOIRES).filter(([k]) => index[k] === undefined).map(([, n]) => n);
   if (manquantes.length) throw new ErreurImport(`Colonnes manquantes : ${manquantes.join(', ')}.`);
-  for (let k = 1; k <= 9; k++) if (etapes[k] === undefined) throw new ErreurImport('Les 9 colonnes d\'étapes (« 1. … » à « 9. … ») sont attendues.');
 
   let genereLe = null;
   let generePar = '';
@@ -137,9 +138,10 @@ export async function lireClasseur(buffer) {
       vague: entier(val(l, 'vague')), responsable: texte(val(l, 'responsable')), version: texte(val(l, 'version')),
       datePrevue: dateIso(val(l, 'datePrevue')), debut: dateIso(val(l, 'debut')), fin: dateIso(val(l, 'fin')),
       typeSite: typeSite(val(l, 'typeSite')),
-      statut: statut(val(l, 'statut')).replace('NON_APPLICABLE', 'NON_DEMARRE'), avancement: entier(val(l, 'avancement')) ?? 0,
-      etape: texte(val(l, 'etape')), commentaires: texte(val(l, 'commentaires')), difficultes: texte(val(l, 'difficultes')),
-      etapes: Array.from({ length: 9 }, (_, k) => statut(l[etapes[k + 1]])),
+      categorie: categorieSaisie(val(l, 'categorie')) || categorieDuNom(nom),
+      debutMission: dateIso(val(l, 'debutMission')), finMission: dateIso(val(l, 'finMission')),
+      statut: statut(val(l, 'statut')).replace('NON_APPLICABLE', 'NON_DEMARRE'),
+      commentaires: texte(val(l, 'commentaires')), difficultes: texte(val(l, 'difficultes')),
     });
   }
   if (!sites.length) throw new ErreurImport('Aucun site trouvé sous la ligne d\'en-tête.');
@@ -153,12 +155,16 @@ export function controlerQualite(sites) {
   const avert = [];
   const codes = new Map();
   for (const s of sites) {
-    if (s.statut === 'TERMINE' && s.etapes.some((e) => e !== 'TERMINE' && e !== 'NON_APPLICABLE'))
-      avert.push(`${s.site} : statut « Terminé » mais toutes les étapes ne sont pas terminées.`);
+    if (s.statut === 'TERMINE' && !s.fin)
+      avert.push(`${s.site} : statut « Terminé » sans date de migration (fin réelle).`);
     if (s.statut === 'NON_DEMARRE' && (s.debut || s.fin))
       avert.push(`${s.site} : « Non démarré » alors qu'une date de début ou de fin est renseignée.`);
     if (s.debut && s.fin && s.fin < s.debut)
-      avert.push(`${s.site} : fin réelle (${fr(s.fin)}) antérieure au début (${fr(s.debut)}).`);
+      avert.push(`${s.site} : date de migration (${fr(s.fin)}) antérieure au début (${fr(s.debut)}).`);
+    if (s.debutMission && s.finMission && s.finMission < s.debutMission)
+      avert.push(`${s.site} : fin de mission (${fr(s.finMission)}) antérieure au début de mission (${fr(s.debutMission)}).`);
+    if (s.categorie === 'A_CLASSER')
+      avert.push(`${s.site} : catégorie non reconnue (ni ESPC, ni district sanitaire, ni hôpital de référence) ; renseignez la colonne « Catégorie de site ».`);
     if (s.typeSite === 'NOUVEAU' && s.version)
       avert.push(`${s.site} : « Nouveau site » alors qu'une version mSupply (${s.version}) est renseignée : s'agit-il d'une migration ?`);
     if (s.statut !== 'NON_DEMARRE' && !s.responsable)
@@ -220,27 +226,20 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
       suivis.push({ ...s, siteId: site.id, responsableId: rapprochement.trouver(s.responsable) });
     }
 
-    // Insertion groupée (par lots) des suivis puis des étapes
+    // Insertion groupée (par lots de 200 sites)
+    const NB = 16;
     for (let i = 0; i < suivis.length; i += 200) {
       const lot = suivis.slice(i, i + 200);
       const p = [];
       const valeurs = lot.map((s, j) => {
         p.push(imp.id, s.siteId, s.vague, s.responsable, s.responsableId, s.version, s.datePrevue,
-          s.debut, s.fin, s.statut, s.avancement, s.etape, s.commentaires, s.difficultes, s.typeSite);
-        return `(${Array.from({ length: 15 }, (_, k) => `$${j * 15 + k + 1}`).join(',')})`;
+          s.debut, s.fin, s.statut, s.commentaires, s.difficultes, s.typeSite, s.categorie, s.debutMission, s.finMission);
+        return `(${Array.from({ length: NB }, (_, k) => `$${j * NB + k + 1}`).join(',')})`;
       });
-      const { rows } = await c.query(
+      await c.query(
         `INSERT INTO suivi_site (import_id, site_id, vague, responsable_libelle, responsable_id, version_msupply,
-           date_prevue, debut_reel, fin_reelle, statut, avancement, etape_en_cours, commentaires, difficultes, type_site)
-         VALUES ${valeurs.join(',')} RETURNING id, site_id`, p);
-      const idParSite = new Map(rows.map((r) => [r.site_id, r.id]));
-      const pe = [];
-      const ve = [];
-      lot.forEach((s) => s.etapes.forEach((st, k) => {
-        pe.push(idParSite.get(s.siteId), k + 1, st);
-        ve.push(`($${pe.length - 2},$${pe.length - 1},$${pe.length})`);
-      }));
-      await c.query(`INSERT INTO suivi_etape (suivi_id, etape_ordre, statut) VALUES ${ve.join(',')}`, pe);
+           date_prevue, debut_reel, fin_reelle, statut, commentaires, difficultes, type_site, categorie, debut_mission, fin_mission)
+         VALUES ${valeurs.join(',')}`, p);
     }
 
     const { rows: [fin] } = await c.query(

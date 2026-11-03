@@ -18,7 +18,8 @@ de suivi de la Direction de l'Activité Pharmaceutique (DAP).
   planning ; progression par étape ; avancement par vague ; sites en retard.
 - **Nouveaux sites** : sites déployés directement sur Open mSupply (colonne Excel « Type de site » =
   « Nouveau site »), comptés à part et listés sur la vue d'ensemble.
-- **Sites** : liste filtrable (recherche, région, district, statut, vague, type de site, retard) avec les 9 étapes.
+- **Sites** : liste filtrable (recherche, région, district, statut, vague, type et catégorie de site, retard)
+  avec la date de migration (fin réelle) et la période de mission. Les étapes de migration ne sont pas suivies.
 - **Équipe SI** : participation **par district** : chaque membre est responsable de **tous les
   sites** des districts qui lui sont rattachés (districts affectés + districts où il est inscrit
   comme « Responsable ») ; taux de migration par membre et par district, vagues, tableau membre × vague.
@@ -105,11 +106,10 @@ client/
 
 ```
 region ─< district ─< site
-etape (les 9 étapes)
 membre ─< alias_membre
 membre ─< mission >─ district
-import_extrait ─< suivi_site >─ site          (une « photo » de chaque site par import)
-                  suivi_site ─< suivi_etape >─ etape
+import_extrait ─< suivi_site >─ site          (une « photo » de chaque site par import :
+                                               type, catégorie, statut, date de migration, mission)
 membre ─< affectation_district >─ district   (le membre prend en charge tous les sites du district)
 parametre (objectif_sites = 2905, objectif_districts = 113, objectif_regions = 33)
 utilisateur (rôles : lecteur, contributeur, admin)

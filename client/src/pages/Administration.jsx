@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api, fmtPeriode } from '../api.js';
 
 export default function Administration() {
   return (
@@ -76,10 +76,10 @@ function Membres() {
             <td>{m.nom_complet}</td>
             <td><input type="checkbox" aria-label={`${m.nom_complet} actif`} checked={m.actif} onChange={(e) => agir(() => api(`/membres/${m.id}`, { methode: 'PUT', corps: { actif: e.target.checked } }))} /></td>
             <td>{m.affectations.length ? m.affectations.map((a) => (
-              <span key={a.id} className="alias chip">{a.district}{a.vague !== null ? ` · V${a.vague}` : ''}<button type="button" aria-label={`Retirer ${a.district}`} onClick={() => agir(() => api(`/affectations/${a.id}`, { methode: 'DELETE' }))}>×</button></span>
+              <span key={a.id} className="alias chip">{a.district}{a.vague !== null ? ` · V${a.vague}` : ''}{a.debut_mission ? ` · ${fmtPeriode(a.debut_mission, a.fin_mission)}` : ''}<button type="button" aria-label={`Retirer ${a.district}`} onClick={() => agir(() => api(`/affectations/${a.id}`, { methode: 'DELETE' }))}>×</button></span>
             )) : <span className="vide">—</span>}</td>
             <td>
-              <form className="form-ligne" onSubmit={(e) => { e.preventDefault(); const c = choix[m.id] || {}; agir(async () => { await api(`/membres/${m.id}/districts`, { methode: 'POST', corps: { district_id: c.district, vague: c.vague } }); setChoix((x) => ({ ...x, [m.id]: {} })); }); }}>
+              <form className="form-ligne" onSubmit={(e) => { e.preventDefault(); const c = choix[m.id] || {}; agir(async () => { await api(`/membres/${m.id}/districts`, { methode: 'POST', corps: { district_id: c.district, vague: c.vague, debut_mission: c.debut, fin_mission: c.fin } }); setChoix((x) => ({ ...x, [m.id]: {} })); }); }}>
                 <select aria-label={`District pour ${m.nom_complet}`} value={choix[m.id]?.district || ''} onChange={(e) => setChoix((x) => ({ ...x, [m.id]: { ...x[m.id], district: e.target.value } }))} required>
                   <option value="">District…</option>
                   {ref.regions.map((r) => (
@@ -87,6 +87,8 @@ function Membres() {
                   ))}
                 </select>
                 <input aria-label="Vague" type="number" min="0" placeholder="Vague" style={{ width: 80 }} value={choix[m.id]?.vague ?? ''} onChange={(e) => setChoix((x) => ({ ...x, [m.id]: { ...x[m.id], vague: e.target.value } }))} />
+                <input aria-label="Début de mission" type="date" title="Début de mission" value={choix[m.id]?.debut || ''} onChange={(e) => setChoix((x) => ({ ...x, [m.id]: { ...x[m.id], debut: e.target.value } }))} />
+                <input aria-label="Fin de mission" type="date" title="Fin de mission" value={choix[m.id]?.fin || ''} onChange={(e) => setChoix((x) => ({ ...x, [m.id]: { ...x[m.id], fin: e.target.value } }))} />
                 <button className="btn" type="submit">Affecter</button>
               </form>
             </td>

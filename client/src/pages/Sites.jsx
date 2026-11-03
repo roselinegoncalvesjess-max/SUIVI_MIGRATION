@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Etat, useDonnees } from '../App.jsx';
-import { STATUTS, api, fmtDate } from '../api.js';
-import { Etapes, Statut } from '../components/Elements.jsx';
+import { CATEGORIES, STATUTS, api, fmtDate, fmtPeriode } from '../api.js';
+import { Categorie, Statut } from '../components/Elements.jsx';
 
-const CHAMPS = ['q', 'region', 'district', 'statut', 'vague', 'type', 'retard'];
+const CHAMPS = ['q', 'region', 'district', 'statut', 'vague', 'type', 'categorie', 'retard'];
 
 export default function Sites() {
   const [params, setParams] = useSearchParams();
@@ -55,6 +55,10 @@ export default function Sites() {
           <option value="MIGRATION">Migration</option>
           <option value="NOUVEAU">Nouveau site</option>
         </select>
+        <select aria-label="Catégorie de site" value={params.get('categorie') || ''} onChange={(e) => changer('categorie', e.target.value)}>
+          <option value="">Toutes les catégories</option>
+          {Object.entries(CATEGORIES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
         <label className="sub" style={{ margin: 0, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <input type="checkbox" checked={params.get('retard') === '1'} onChange={(e) => changer('retard', e.target.checked ? '1' : '')} /> En retard
         </label>
@@ -63,7 +67,7 @@ export default function Sites() {
       </div>
       <Etat etat={etat}>{(d) => (
         <div className="tablewrap" style={{ maxHeight: '70vh', overflow: 'auto' }}><table>
-          <thead><tr><th>Site</th><th>Région</th><th>District</th><th>Vague</th><th>Responsable</th><th>Statut</th><th>Étapes 1 → 9</th><th className="r">Avanc.</th><th>Prévu le</th><th>Fin réelle</th></tr></thead>
+          <thead><tr><th>Site</th><th>Région</th><th>District</th><th>Vague</th><th>Responsable</th><th>Catégorie</th><th>Statut</th><th>Prévu le</th><th>Date de migration</th><th>Mission</th></tr></thead>
           <tbody>
             {d.sites.length === 0 && <tr><td colSpan={10} className="vide">Aucun site ne correspond à ces filtres.</td></tr>}
             {d.sites.map((s) => (
@@ -71,8 +75,9 @@ export default function Sites() {
                 <td>{s.type_site === 'NOUVEAU' && <span className="badge-nv">Nouveau</span>}{s.site}{s.difficultes && !/^ras\.?$/i.test(s.difficultes.trim()) && <span className="pill" style={{ color: 'var(--crit)', marginLeft: 6 }} title={s.difficultes}>Difficulté</span>}</td>
                 <td>{s.region}</td><td>{s.district}</td><td className="num">{s.vague ?? '—'}</td>
                 <td>{s.responsable_libelle || '—'}{s.membre && <span className="chip" style={{ marginLeft: 6 }} title={s.membre}>SI</span>}</td>
-                <td><Statut statut={s.statut} /></td><td><Etapes etapes={s.etapes} /></td>
-                <td className="r num">{s.avancement} %</td><td className="num">{fmtDate(s.date_prevue)}</td><td className="num">{fmtDate(s.fin_reelle)}</td>
+                <td><Categorie categorie={s.categorie} /></td><td><Statut statut={s.statut} /></td>
+                <td className="num">{fmtDate(s.date_prevue)}</td><td className="num"><b>{fmtDate(s.date_migration)}</b></td>
+                <td className="num sub" style={{ margin: 0 }}>{fmtPeriode(s.debut_mission, s.fin_mission)}</td>
               </tr>
             ))}
           </tbody>

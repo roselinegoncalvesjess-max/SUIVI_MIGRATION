@@ -24,11 +24,11 @@ export default function api(notifier = () => {}) {
 
   r.get('/tableau-de-bord', avecImport, asynchrone(async (req, res) => {
     const id = req.imp.id;
-    const [synthese, regions, vagues, etapes, rythme] = await Promise.all([
-      stats.synthese(req.imp), stats.regionsEtDistricts(id), stats.parVague(id), stats.progressionEtapes(id), stats.rythme(id),
+    const [synthese, regions, vagues, categories, missions, rythme] = await Promise.all([
+      stats.synthese(req.imp), stats.regionsEtDistricts(id), stats.parVague(id), stats.parCategorie(id), stats.missions(id), stats.rythme(id),
     ]);
     const retards = await stats.sites(id, { retard: '1' });
-    res.json({ import: req.imp, synthese, regions, vagues, etapes, rythme, retards });
+    res.json({ import: req.imp, synthese, regions, vagues, categories, missions, rythme, retards });
   }));
 
   r.get('/sites', avecImport, asynchrone(async (req, res) => {
@@ -80,7 +80,7 @@ export default function api(notifier = () => {}) {
       `SELECT m.*,
          COALESCE((SELECT json_agg(json_build_object('id', a.id, 'libelle', a.libelle) ORDER BY a.libelle)
                    FROM alias_membre a WHERE a.membre_id = m.id), '[]') AS alias,
-         COALESCE((SELECT json_agg(json_build_object('id', x.id, 'district_id', d.id, 'district', d.nom, 'region', r.nom, 'vague', x.vague) ORDER BY d.nom)
+         COALESCE((SELECT json_agg(json_build_object('id', x.id, 'district_id', d.id, 'district', d.nom, 'region', r.nom, 'vague', x.vague, 'debut_mission', x.debut_mission, 'fin_mission', x.fin_mission) ORDER BY d.nom)
                    FROM affectation_district x JOIN district d ON d.id = x.district_id JOIN region r ON r.id = d.region_id
                    WHERE x.membre_id = m.id), '[]') AS affectations
        FROM membre m ORDER BY m.nom_complet`);
@@ -91,12 +91,17 @@ export default function api(notifier = () => {}) {
   r.post('/membres/:id/districts', role('admin'), asynchrone(async (req, res) => {
     const districtId = +req.body?.district_id;
     const vague = req.body?.vague === '' || req.body?.vague == null ? null : +req.body.vague;
+    const dateOuNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null);
+    const debut = dateOuNull(req.body?.debut_mission);
+    const fin = dateOuNull(req.body?.fin_mission);
+    if (debut && fin && fin < debut) return res.status(400).json({ erreur: 'La fin de mission est antérieure au début.' });
     if (!districtId) return res.status(400).json({ erreur: 'Choisissez un district.' });
     try {
       const { rows: [a] } = await query(
-        `INSERT INTO affectation_district (membre_id, district_id, vague) VALUES ($1, $2, $3)
-         ON CONFLICT (membre_id, district_id) DO UPDATE SET vague = EXCLUDED.vague RETURNING *`,
-        [+req.params.id, districtId, Number.isFinite(vague) ? vague : null]);
+        `INSERT INTO affectation_district (membre_id, district_id, vague, debut_mission, fin_mission) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (membre_id, district_id) DO UPDATE SET vague = EXCLUDED.vague,
+           debut_mission = EXCLUDED.debut_mission, fin_mission = EXCLUDED.fin_mission RETURNING *`,
+        [+req.params.id, districtId, Number.isFinite(vague) ? vague : null, debut, fin]);
       notifier('equipe', {});
       res.status(201).json({ affectation: a });
     } catch (e) {
