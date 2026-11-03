@@ -40,4 +40,4 @@ export async function api(chemin, { methode = 'GET', corps, fichier } = {}) {
 export const fmtDate = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—');
 export const fmtDateHeure = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Abidjan' }) : '—');
 export const fmtPct = (v, d = 1) => `${Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
-export const STATUTS = { TERMINE: 'Terminé', EN_COURS: 'En cours', NON_DEMARRE: 'Non démarré' };
+export const STATUTS = { TERMINE: 'Terminé', EN_COURS: 'En cours', NON_DEMARRE: 'Non démarré', NON_APPLICABLE: 'Non applicable' };

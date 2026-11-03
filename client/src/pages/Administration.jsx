@@ -26,17 +26,18 @@ function Objectifs() {
   if (!o) return null;
   const enregistrer = async (e) => {
     e.preventDefault();
-    try { setO(await api('/parametres', { methode: 'PUT', corps: { sites: o.sites, districts: o.districts, regions: o.regions } })); setMsg({ ok: 'Objectifs enregistrés.' }); }
+    try { setO(await api('/parametres', { methode: 'PUT', corps: { sites: o.sites, districts: o.districts, regions: o.regions, nouveaux: o.nouveaux } })); setMsg({ ok: 'Objectifs enregistrés.' }); }
     catch (err) { setMsg({ erreur: err.message }); }
   };
   return (
     <section className="panel">
       <h2>Objectifs nationaux</h2>
-      <p className="sub">Le taux de migration national est calculé sur ces totaux (Côte d'Ivoire).</p>
+      <p className="sub">Le taux de migration national est calculé sur ces totaux (Côte d'Ivoire). Nouveaux sites : 0 tant que le nombre n'est pas connu.</p>
       <form className="form-ligne" onSubmit={enregistrer}>
         <label htmlFor="o-sites">Sites à migrer</label><input id="o-sites" type="number" min="1" value={o.sites} onChange={(e) => setO({ ...o, sites: e.target.value })} />
         <label htmlFor="o-dist">Districts</label><input id="o-dist" type="number" min="1" value={o.districts} onChange={(e) => setO({ ...o, districts: e.target.value })} />
         <label htmlFor="o-reg">Régions</label><input id="o-reg" type="number" min="1" value={o.regions} onChange={(e) => setO({ ...o, regions: e.target.value })} />
+        <label htmlFor="o-nv">Nouveaux sites à déployer</label><input id="o-nv" type="number" min="0" title="0 = pas encore défini" value={o.nouveaux} onChange={(e) => setO({ ...o, nouveaux: e.target.value })} />
         <button className="btn primaire" type="submit">Enregistrer</button>
         {msg.ok && <span className="sub" style={{ margin: 0 }}>{msg.ok}</span>}
       </form>

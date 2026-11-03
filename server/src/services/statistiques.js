@@ -1,17 +1,24 @@
 /** Calculs de synthèse sur un import (par défaut, le dernier). */
 import { query } from '../db.js';
 
+// « sites », « migres », « en_cours », « non_demarres » ne concernent que les sites à MIGRER.
+// Les nouveaux sites (déploiement direct sur Open mSupply) sont comptés à part.
 const COMPTES = `
-  COUNT(*)::int AS sites,
-  COUNT(*) FILTER (WHERE s.statut = 'TERMINE')::int AS migres,
-  COUNT(*) FILTER (WHERE s.statut = 'EN_COURS')::int AS en_cours,
-  COUNT(*) FILTER (WHERE s.statut = 'NON_DEMARRE')::int AS non_demarres`;
+  COUNT(*) FILTER (WHERE s.type_site = 'MIGRATION')::int AS sites,
+  COUNT(*) FILTER (WHERE s.type_site = 'MIGRATION' AND s.statut = 'TERMINE')::int AS migres,
+  COUNT(*) FILTER (WHERE s.type_site = 'MIGRATION' AND s.statut = 'EN_COURS')::int AS en_cours,
+  COUNT(*) FILTER (WHERE s.type_site = 'MIGRATION' AND s.statut = 'NON_DEMARRE')::int AS non_demarres,
+  COUNT(*) FILTER (WHERE s.type_site = 'NOUVEAU')::int AS nouveaux,
+  COUNT(*) FILTER (WHERE s.type_site = 'NOUVEAU' AND s.statut = 'TERMINE')::int AS nouveaux_deployes,
+  COUNT(*) FILTER (WHERE s.type_site = 'NOUVEAU' AND s.statut = 'EN_COURS')::int AS nouveaux_en_cours`;
 
 const JOINTURES = `
   FROM suivi_site s
   JOIN site si ON si.id = s.site_id
   JOIN district d ON d.id = si.district_id
   JOIN region r ON r.id = d.region_id`;
+
+const CLES = ['sites', 'migres', 'en_cours', 'non_demarres', 'nouveaux', 'nouveaux_deployes', 'nouveaux_en_cours'];
 
 export const taux = (migres, total) => (total ? Math.round((1000 * migres) / total) / 10 : 0);
 const avecTaux = (l) => ({ ...l, taux: taux(l.migres, l.sites), complet: l.sites > 0 && l.migres === l.sites });
@@ -30,11 +37,11 @@ export async function regionsEtDistricts(importId) {
   const regions = new Map();
   for (const l of rows) {
     if (!regions.has(l.region_id)) {
-      regions.set(l.region_id, { id: l.region_id, nom: l.region, sites: 0, migres: 0, en_cours: 0, non_demarres: 0, districts: [] });
+      regions.set(l.region_id, { id: l.region_id, nom: l.region, ...Object.fromEntries(CLES.map((k) => [k, 0])), districts: [] });
     }
     const r = regions.get(l.region_id);
-    for (const k of ['sites', 'migres', 'en_cours', 'non_demarres']) r[k] += l[k];
-    r.districts.push(avecTaux({ id: l.district_id, nom: l.district, sites: l.sites, migres: l.migres, en_cours: l.en_cours, non_demarres: l.non_demarres }));
+    for (const k of CLES) r[k] += l[k];
+    r.districts.push(avecTaux({ id: l.district_id, nom: l.district, ...Object.fromEntries(CLES.map((k) => [k, l[k]])) }));
   }
   const tri = (a, b) => b.sites - a.sites || a.nom.localeCompare(b.nom, 'fr');
   return [...regions.values()].map((r) => ({ ...avecTaux(r), districts: r.districts.sort(tri) })).sort(tri);
@@ -43,7 +50,8 @@ export async function regionsEtDistricts(importId) {
 export async function objectifs() {
   const { rows } = await query('SELECT cle, valeur, libelle FROM parametre ORDER BY cle');
   const o = Object.fromEntries(rows.map((r) => [r.cle, r.valeur]));
-  return { sites: o.objectif_sites || 0, districts: o.objectif_districts || 0, regions: o.objectif_regions || 0, detail: rows };
+  return { sites: o.objectif_sites || 0, districts: o.objectif_districts || 0, regions: o.objectif_regions || 0,
+    nouveaux: o.objectif_nouveaux_sites || 0, detail: rows };
 }
 
 export async function synthese(imp) {
@@ -55,7 +63,7 @@ export async function synthese(imp) {
   const regions = await regionsEtDistricts(imp.id);
   const districts = regions.flatMap((r) => r.districts);
   const { rows: [prec] } = await query(
-    `SELECT nb_termines FROM import_extrait WHERE (importe_le, id) < ($1, $2)
+    `SELECT nb_termines, nb_nouveaux_deployes FROM import_extrait WHERE (importe_le, id) < ($1, $2)
      ORDER BY importe_le DESC, id DESC LIMIT 1`, [imp.importe_le, imp.id]);
   const obj = await objectifs();
   return {
@@ -67,6 +75,11 @@ export async function synthese(imp) {
     taux_national: taux(t.migres, obj.sites),
     sites_restants: Math.max(obj.sites - t.migres, 0),
     sites_hors_extrait: Math.max(obj.sites - t.sites, 0),
+    // Nouveaux sites : déploiement direct sur Open mSupply
+    objectif_nouveaux: obj.nouveaux,
+    taux_nouveaux: taux(t.nouveaux_deployes, obj.nouveaux || t.nouveaux),
+    // Tous les sites sur Open mSupply (migrés + nouveaux déployés)
+    sites_open_msupply: t.migres + t.nouveaux_deployes,
     regions: regions.length,
     regions_touchees: regions.filter((r) => r.migres > 0).length,
     regions_completes: regions.filter((r) => r.complet).length,
@@ -74,6 +87,7 @@ export async function synthese(imp) {
     districts_touches: districts.filter((d) => d.migres > 0).length,
     districts_complets: districts.filter((d) => d.complet).length,
     evolution: prec ? imp.nb_termines - prec.nb_termines : null,
+    evolution_nouveaux: prec ? imp.nb_nouveaux_deployes - prec.nb_nouveaux_deployes : null,
   };
 }
 
@@ -90,7 +104,7 @@ export async function progressionEtapes(importId) {
        COUNT(*) FILTER (WHERE se.statut = 'EN_COURS')::int AS en_cours,
        COUNT(*)::int AS total
      FROM suivi_etape se JOIN suivi_site s ON s.id = se.suivi_id JOIN etape e ON e.ordre = se.etape_ordre
-     WHERE s.import_id = $1 GROUP BY e.ordre, e.libelle ORDER BY e.ordre`, [importId]);
+     WHERE s.import_id = $1 AND s.type_site = 'MIGRATION' GROUP BY e.ordre, e.libelle ORDER BY e.ordre`, [importId]);
   return rows.map((l) => ({ ...l, taux: taux(l.termines, l.total) }));
 }
 
@@ -102,12 +116,16 @@ export async function rythme(importId) {
     let c = 0;
     return rows.map((r) => ({ date: r.date, cumul: (c += r.n) }));
   };
-  return { reel: await cumul('fin_reelle', "AND statut = 'TERMINE'"), prevu: await cumul('date_prevue', '') };
+  return {
+    reel: await cumul('fin_reelle', "AND statut = 'TERMINE' AND type_site = 'MIGRATION'"),
+    prevu: await cumul('date_prevue', "AND type_site = 'MIGRATION'"),
+    nouveaux: await cumul('fin_reelle', "AND statut = 'TERMINE' AND type_site = 'NOUVEAU'"),
+  };
 }
 
 const SITES_COLONNES = `
   s.id, si.nom AS site, r.id AS region_id, r.nom AS region, d.id AS district_id, d.nom AS district, s.vague,
-  s.responsable_libelle, s.responsable_id, m.nom_complet AS membre, s.statut, s.avancement,
+  s.type_site, s.responsable_libelle, s.responsable_id, m.nom_complet AS membre, s.statut, s.avancement,
   s.date_prevue, s.debut_reel, s.fin_reelle, s.etape_en_cours, s.version_msupply, s.commentaires, s.difficultes,
   (SELECT array_agg(se.statut::text ORDER BY se.etape_ordre) FROM suivi_etape se WHERE se.suivi_id = s.id) AS etapes`;
 
@@ -121,6 +139,7 @@ export async function sites(importId, f = {}) {
   if (f.district) ajouter('d.id = ?', +f.district);
   if (f.statut) ajouter('s.statut = ?', f.statut);
   if (f.vague) ajouter('s.vague = ?', +f.vague);
+  if (f.type === 'MIGRATION' || f.type === 'NOUVEAU') ajouter('s.type_site = ?::type_site', f.type);
   if (f.retard === '1') cond.push("s.statut <> 'TERMINE' AND s.date_prevue < CURRENT_DATE");
   const { rows } = await query(
     `SELECT ${SITES_COLONNES} ${JOINTURES} LEFT JOIN membre m ON m.id = s.responsable_id
@@ -151,7 +170,7 @@ export async function participationEquipe(importId, equipe = 'SI') {
      LEFT JOIN site si ON si.district_id = d.id
      LEFT JOIN suivi_site s ON s.site_id = si.id AND s.import_id = $1
      WHERE s.id IS NOT NULL OR d.id IN (SELECT district_id FROM affectation_district)
-     GROUP BY d.id, d.nom, r.nom`.replace('COUNT(*)::int AS sites', 'COUNT(s.id)::int AS sites'), [importId]);
+     GROUP BY d.id, d.nom, r.nom`, [importId]);
   const parId = new Map(districts.map((d) => [d.id, avecTaux({ ...d, vagues: d.vagues.sort((a, b) => a - b) })]));
   const uniques = (a) => [...new Set(a)].sort((x, y) => String(x).localeCompare(String(y), 'fr', { numeric: true }));
 
@@ -177,6 +196,8 @@ export async function participationEquipe(importId, equipe = 'SI') {
       ...avecTaux({ sites: somme('sites'), migres: somme('migres') }),
       en_cours: somme('en_cours'),
       non_demarres: somme('non_demarres'),
+      nouveaux: somme('nouveaux'),
+      nouveaux_deployes: somme('nouveaux_deployes'),
       vagues: uniques(ds.flatMap((d) => d.vagues_participation)),
       regions: uniques(ds.map((d) => d.region)),
       par_vague: parVague,
@@ -187,7 +208,7 @@ export async function participationEquipe(importId, equipe = 'SI') {
 export async function historique() {
   const { rows } = await query(
     `SELECT i.id, i.nom_fichier, i.genere_le, i.genere_par, i.importe_le, u.nom AS importe_par_nom,
-       i.nb_sites, i.nb_termines, i.nb_en_cours, i.nb_non_demarres, jsonb_array_length(i.avertissements) AS nb_avertissements
+       i.nb_sites, i.nb_termines, i.nb_en_cours, i.nb_non_demarres, i.nb_nouveaux, i.nb_nouveaux_deployes, jsonb_array_length(i.avertissements) AS nb_avertissements
      FROM import_extrait i LEFT JOIN utilisateur u ON u.id = i.importe_par ORDER BY i.importe_le DESC, i.id DESC`);
   return rows.map((r, i) => ({
     ...r,

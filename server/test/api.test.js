@@ -131,3 +131,31 @@ test('un alias ajouté relie aussitôt les sites', async () => {
   assert.deepEqual([p.districts.map((d) => d.nom), p.sites], [['SINEMATIALI'], 21]);
   await request(app).delete(`/api/alias/${r.body.alias.id}`).set('Authorization', `Bearer ${admin}`);
 });
+
+test('nouveaux sites : colonne « Type de site » comptée à part', async () => {
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await readFile(EXTRAIT));
+  const ws = wb.getWorksheet('Sites');
+  const col = ws.getRow(4).cellCount + 1;
+  ws.getRow(4).getCell(col).value = 'Type de site';
+  // On déclare comme « nouveaux » 3 sites : 2 terminés (lignes 5 et 6) et 1 site non démarré de Divo
+  let divo = null;
+  ws.eachRow((row, n) => {
+    if (n < 5) return;
+    row.getCell(col).value = 'Migration';
+    if (!divo && row.getCell(5).value === 'DIVO') divo = n;
+  });
+  for (const n of [5, 6, divo]) ws.getRow(n).getCell(col).value = 'Nouveau site';
+  const fichier = Buffer.from(await wb.xlsx.writeBuffer());
+
+  const r = await request(app).post('/api/imports').set('Authorization', `Bearer ${admin}`).attach('fichier', fichier, 'avec_nouveaux.xlsx');
+  assert.equal(r.status, 201);
+  assert.deepEqual([r.body.import.nb_sites, r.body.import.nb_nouveaux, r.body.import.nb_nouveaux_deployes], [376, 3, 2]);
+  const s = (await get('/api/tableau-de-bord')).body.synthese;
+  assert.deepEqual([s.sites, s.migres, s.nouveaux, s.nouveaux_deployes, s.sites_open_msupply], [376, 219, 3, 2, 221]);
+  assert.equal(s.taux_national, 7.5); // 219 / 2905
+  assert.equal((await get('/api/sites?type=NOUVEAU')).body.sites.length, 3);
+  const divoD = (await get('/api/tableau-de-bord')).body.regions.flatMap((x) => x.districts).find((d) => d.nom === 'DIVO');
+  assert.deepEqual([divoD.sites, divoD.nouveaux], [41, 1]);
+});

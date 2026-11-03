@@ -16,7 +16,9 @@ de suivi de la Direction de l'Activité Pharmaceutique (DAP).
 - **Vue d'ensemble** : **taux de migration national** (sites migrés / 2 905 sites à migrer),
   sites restants, régions (sur 33) et districts (sur 113) ayant au moins un site migré ; tableau **par région et par district** dépliable ; rythme réel comparé au
   planning ; progression par étape ; avancement par vague ; sites en retard.
-- **Sites** : liste filtrable (recherche, région, district, statut, vague, retard) avec les 9 étapes.
+- **Nouveaux sites** : sites déployés directement sur Open mSupply (colonne Excel « Type de site » =
+  « Nouveau site »), comptés à part et listés sur la vue d'ensemble.
+- **Sites** : liste filtrable (recherche, région, district, statut, vague, type de site, retard) avec les 9 étapes.
 - **Équipe SI** : participation **par district** : chaque membre est responsable de **tous les
   sites** des districts qui lui sont rattachés (districts affectés + districts où il est inscrit
   comme « Responsable ») ; taux de migration par membre et par district, vagues, tableau membre × vague.
@@ -27,6 +29,13 @@ de suivi de la Direction de l'Activité Pharmaceutique (DAP).
   extraits, comptes utilisateurs.
 - **Temps réel** : dès qu'un extrait est importé ou que l'équipe change, tous les écrans ouverts
   se mettent à jour (Socket.IO) et un message s'affiche.
+
+## Alimentation par fichier Excel
+
+L'application est alimentée par un fichier .xlsx au format de l'extrait de la DAP, complété de la
+colonne **« Type de site »** (« Migration » ou « Nouveau site »). Un modèle vierge avec listes
+déroulantes et mode d'emploi est fourni : `docs/Modele_alimentation_suivi_migration.xlsx`.
+Le document de présentation du projet est dans `docs/`.
 
 ## Démarrage rapide avec Docker
 

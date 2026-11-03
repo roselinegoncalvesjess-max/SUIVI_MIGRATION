@@ -10,7 +10,13 @@ Ce fichier donne à Claude Code le contexte du projet. Répondre et commenter le
   l'Activité Pharmaceutique), feuille « Sites ». Chaque import est conservé (historique).
 - 9 étapes de migration (table `etape`) : Planification → … → Clôture / stabilisation.
 - Statuts : `TERMINE`, `EN_COURS`, `NON_DEMARRE`.
-- **Taux de migration national** = sites `TERMINE` du dernier import / `objectif_sites`.
+- **Taux de migration national** = sites `TERMINE` **de type MIGRATION** du dernier import / `objectif_sites`.
+- **Nouveaux sites** : colonne Excel « Type de site » = « Nouveau site » → `suivi_site.type_site = 'NOUVEAU'`
+  (déploiement direct sur Open mSupply). Comptés à part (`nouveaux`, `nouveaux_deployes`) ; toutes les
+  statistiques « sites / migres / en_cours / non_demarres » ne portent que sur `MIGRATION`.
+  Étape « Non applicable » → `NON_APPLICABLE` (ex. étape 3 pour un nouveau site).
+- Alimentation : fichier Excel au format de `docs/Modele_alimentation_suivi_migration.xlsx`
+  (colonnes reconnues par leur nom ; feuille « Sites »).
 
 ### Règle de l'équipe SI (importante)
 Un membre de l'équipe Système d'information est responsable de **tous les sites d'un district**,

@@ -135,11 +135,14 @@ export default function api(notifier = () => {}) {
   r.get('/parametres', asynchrone(async (req, res) => res.json(await stats.objectifs())));
 
   r.put('/parametres', role('admin'), asynchrone(async (req, res) => {
-    const valeurs = { objectif_sites: req.body?.sites, objectif_districts: req.body?.districts, objectif_regions: req.body?.regions };
+    const valeurs = { objectif_sites: req.body?.sites, objectif_districts: req.body?.districts, objectif_regions: req.body?.regions,
+      objectif_nouveaux_sites: req.body?.nouveaux };
     for (const [cle, v] of Object.entries(valeurs)) {
       if (v === undefined) continue;
       const n = Number(v);
-      if (!Number.isInteger(n) || n <= 0) return res.status(400).json({ erreur: 'Les objectifs doivent être des nombres entiers positifs.' });
+      if (!Number.isInteger(n) || n < 0 || (n === 0 && cle !== 'objectif_nouveaux_sites')) {
+        return res.status(400).json({ erreur: 'Les objectifs doivent être des nombres entiers positifs.' });
+      }
       await query('UPDATE parametre SET valeur = $2 WHERE cle = $1', [cle, n]);
     }
     notifier('import', {}); // les écrans recalculent les taux

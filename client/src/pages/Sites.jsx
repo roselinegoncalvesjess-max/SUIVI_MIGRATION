@@ -4,7 +4,7 @@ import { Etat, useDonnees } from '../App.jsx';
 import { STATUTS, api, fmtDate } from '../api.js';
 import { Etapes, Statut } from '../components/Elements.jsx';
 
-const CHAMPS = ['q', 'region', 'district', 'statut', 'vague', 'retard'];
+const CHAMPS = ['q', 'region', 'district', 'statut', 'vague', 'type', 'retard'];
 
 export default function Sites() {
   const [params, setParams] = useSearchParams();
@@ -50,6 +50,11 @@ export default function Sites() {
           <option value="">Toutes les vagues</option>
           {filtres.vagues.map((v) => <option key={v} value={v}>Vague {v}</option>)}
         </select>
+        <select aria-label="Type de site" value={params.get('type') || ''} onChange={(e) => changer('type', e.target.value)}>
+          <option value="">Tous les types</option>
+          <option value="MIGRATION">Migration</option>
+          <option value="NOUVEAU">Nouveau site</option>
+        </select>
         <label className="sub" style={{ margin: 0, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <input type="checkbox" checked={params.get('retard') === '1'} onChange={(e) => changer('retard', e.target.checked ? '1' : '')} /> En retard
         </label>
@@ -63,7 +68,7 @@ export default function Sites() {
             {d.sites.length === 0 && <tr><td colSpan={10} className="vide">Aucun site ne correspond à ces filtres.</td></tr>}
             {d.sites.map((s) => (
               <tr key={s.id}>
-                <td>{s.site}{s.difficultes && !/^ras\.?$/i.test(s.difficultes.trim()) && <span className="pill" style={{ color: 'var(--crit)', marginLeft: 6 }} title={s.difficultes}>Difficulté</span>}</td>
+                <td>{s.type_site === 'NOUVEAU' && <span className="badge-nv">Nouveau</span>}{s.site}{s.difficultes && !/^ras\.?$/i.test(s.difficultes.trim()) && <span className="pill" style={{ color: 'var(--crit)', marginLeft: 6 }} title={s.difficultes}>Difficulté</span>}</td>
                 <td>{s.region}</td><td>{s.district}</td><td className="num">{s.vague ?? '—'}</td>
                 <td>{s.responsable_libelle || '—'}{s.membre && <span className="chip" style={{ marginLeft: 6 }} title={s.membre}>SI</span>}</td>
                 <td><Statut statut={s.statut} /></td><td><Etapes etapes={s.etapes} /></td>

@@ -19,6 +19,7 @@ const COLONNES = {
   'date prévue': 'datePrevue', 'début réel': 'debut', 'fin réelle': 'fin', 'statut': 'statut',
   'avancement %': 'avancement', 'étape en cours': 'etape', 'commentaires': 'commentaires',
   'difficultés': 'difficultes',
+  'type de site': 'typeSite', 'type': 'typeSite', 'type de déploiement': 'typeSite',
 };
 const OBLIGATOIRES = { site: 'Site', region: 'Région', district: 'District', statut: 'Statut' };
 const RE_GENERE = /G[ée]n[ée]r[ée] le\s+(\d{2}\/\d{2}\/\d{4})(?:\s+à\s+(\d{1,2}:\d{2}))?(?:\s+par\s+(.+))?/i;
@@ -63,8 +64,14 @@ function entier(v) {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
+/** « Nouveau site », « Nouveau déploiement »… → NOUVEAU ; tout le reste (ou vide) → MIGRATION. */
+export function typeSite(v) {
+  return normaliser(texte(v)).startsWith('nouv') ? 'NOUVEAU' : 'MIGRATION';
+}
+
 export function statut(v) {
   const n = normaliser(texte(v));
+  if (n === 'non applicable' || n === 'na' || n === 'n a' || n === 'sans objet') return 'NON_APPLICABLE';
   if (n.startsWith('termin')) return 'TERMINE';
   if (n.startsWith('en cours')) return 'EN_COURS';
   return 'NON_DEMARRE';
@@ -129,7 +136,8 @@ export async function lireClasseur(buffer) {
       codeDistrict: texte(val(l, 'codeDistrict')), district: texte(val(l, 'district')) || '—',
       vague: entier(val(l, 'vague')), responsable: texte(val(l, 'responsable')), version: texte(val(l, 'version')),
       datePrevue: dateIso(val(l, 'datePrevue')), debut: dateIso(val(l, 'debut')), fin: dateIso(val(l, 'fin')),
-      statut: statut(val(l, 'statut')), avancement: entier(val(l, 'avancement')) ?? 0,
+      typeSite: typeSite(val(l, 'typeSite')),
+      statut: statut(val(l, 'statut')).replace('NON_APPLICABLE', 'NON_DEMARRE'), avancement: entier(val(l, 'avancement')) ?? 0,
       etape: texte(val(l, 'etape')), commentaires: texte(val(l, 'commentaires')), difficultes: texte(val(l, 'difficultes')),
       etapes: Array.from({ length: 9 }, (_, k) => statut(l[etapes[k + 1]])),
     });
@@ -145,12 +153,14 @@ export function controlerQualite(sites) {
   const avert = [];
   const codes = new Map();
   for (const s of sites) {
-    if (s.statut === 'TERMINE' && s.etapes.some((e) => e !== 'TERMINE'))
+    if (s.statut === 'TERMINE' && s.etapes.some((e) => e !== 'TERMINE' && e !== 'NON_APPLICABLE'))
       avert.push(`${s.site} : statut « Terminé » mais toutes les étapes ne sont pas terminées.`);
     if (s.statut === 'NON_DEMARRE' && (s.debut || s.fin))
       avert.push(`${s.site} : « Non démarré » alors qu'une date de début ou de fin est renseignée.`);
     if (s.debut && s.fin && s.fin < s.debut)
       avert.push(`${s.site} : fin réelle (${fr(s.fin)}) antérieure au début (${fr(s.debut)}).`);
+    if (s.typeSite === 'NOUVEAU' && s.version)
+      avert.push(`${s.site} : « Nouveau site » alors qu'une version mSupply (${s.version}) est renseignée : s'agit-il d'une migration ?`);
     if (s.statut !== 'NON_DEMARRE' && !s.responsable)
       avert.push(`${s.site} : migration démarrée sans responsable.`);
     if (s.codeDistrict) {
@@ -179,7 +189,9 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
 
     const regions = new Map();
     const districts = new Map();
-    const compte = { TERMINE: 0, EN_COURS: 0, NON_DEMARRE: 0 };
+    // nb_* = sites à MIGRER ; les nouveaux sites sont comptés à part
+    const compte = { TERMINE: 0, EN_COURS: 0, NON_DEMARRE: 0, NON_APPLICABLE: 0 };
+    const nouveaux = { total: 0, deployes: 0 };
     const suivis = [];
 
     for (const s of donnees.sites) {
@@ -201,7 +213,10 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
         `INSERT INTO site (nom, district_id) VALUES ($1, $2)
          ON CONFLICT (nom) DO UPDATE SET district_id = EXCLUDED.district_id RETURNING id`,
         [s.site, districts.get(cleD)]);
-      compte[s.statut]++;
+      if (s.typeSite === 'NOUVEAU') {
+        nouveaux.total++;
+        if (s.statut === 'TERMINE') nouveaux.deployes++;
+      } else compte[s.statut]++;
       suivis.push({ ...s, siteId: site.id, responsableId: rapprochement.trouver(s.responsable) });
     }
 
@@ -211,12 +226,12 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
       const p = [];
       const valeurs = lot.map((s, j) => {
         p.push(imp.id, s.siteId, s.vague, s.responsable, s.responsableId, s.version, s.datePrevue,
-          s.debut, s.fin, s.statut, s.avancement, s.etape, s.commentaires, s.difficultes);
-        return `(${Array.from({ length: 14 }, (_, k) => `$${j * 14 + k + 1}`).join(',')})`;
+          s.debut, s.fin, s.statut, s.avancement, s.etape, s.commentaires, s.difficultes, s.typeSite);
+        return `(${Array.from({ length: 15 }, (_, k) => `$${j * 15 + k + 1}`).join(',')})`;
       });
       const { rows } = await c.query(
         `INSERT INTO suivi_site (import_id, site_id, vague, responsable_libelle, responsable_id, version_msupply,
-           date_prevue, debut_reel, fin_reelle, statut, avancement, etape_en_cours, commentaires, difficultes)
+           date_prevue, debut_reel, fin_reelle, statut, avancement, etape_en_cours, commentaires, difficultes, type_site)
          VALUES ${valeurs.join(',')} RETURNING id, site_id`, p);
       const idParSite = new Map(rows.map((r) => [r.site_id, r.id]));
       const pe = [];
@@ -229,9 +244,11 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
     }
 
     const { rows: [fin] } = await c.query(
-      `UPDATE import_extrait SET nb_sites = $2, nb_termines = $3, nb_en_cours = $4, nb_non_demarres = $5
+      `UPDATE import_extrait SET nb_sites = $2, nb_termines = $3, nb_en_cours = $4, nb_non_demarres = $5,
+         nb_nouveaux = $6, nb_nouveaux_deployes = $7
        WHERE id = $1 RETURNING *`,
-      [imp.id, suivis.length, compte.TERMINE, compte.EN_COURS, compte.NON_DEMARRE]);
+      [imp.id, suivis.length - nouveaux.total, compte.TERMINE, compte.EN_COURS, compte.NON_DEMARRE,
+        nouveaux.total, nouveaux.deployes]);
     return { import: fin, avertissements };
   });
 }

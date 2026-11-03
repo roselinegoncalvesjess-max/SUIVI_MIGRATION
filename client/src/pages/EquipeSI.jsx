@@ -45,6 +45,7 @@ function Contenu({ d }) {
                 <div><b className="num">{m.non_demarres}</b><span>non démarrés</span></div>
               </div>
               {m.districts.length > 0 && <Taux valeur={m.taux} complet={m.sites > 0 && m.migres === m.sites} gras />}
+              {m.nouveaux > 0 && <div className="sub" style={{ margin: 0 }}><span className="badge-nv">Nouveau</span>{m.nouveaux_deployes} / {m.nouveaux} nouveaux sites déployés</div>}
               <div>Vague(s) : {m.vagues.length ? m.vagues.map((v) => <span key={v} className="chip" style={{ marginRight: 4 }}>Vague {v}</span>) : <span className="vide">aucune pour l'instant</span>}</div>
             </div>
           ))}
