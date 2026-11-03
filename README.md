@@ -14,8 +14,8 @@ de suivi de la Direction de l'Activité Pharmaceutique (DAP).
 ## Fonctionnalités
 
 - **Vue d'ensemble** : **taux de migration national** (sites migrés / 2 905 sites à migrer),
-  sites restants, régions (sur 33) et districts (sur 113) ayant au moins un site migré ; tableau **par région et par district** dépliable ; rythme réel comparé au
-  planning ; progression par étape ; avancement par vague ; sites en retard.
+  sites restants, régions (sur 33) et districts (sur 113) ayant au moins un site migré ; tableau **par région et par district** dépliable ; rythme de migration (à la date de migration) comparé au planning ;
+  répartition par catégorie de site ; périodes de migration (missions) ; avancement par vague ; sites en retard.
 - **Nouveaux sites** : sites déployés directement sur Open mSupply (colonne Excel « Type de site » =
   « Nouveau site »), comptés à part et listés sur la vue d'ensemble.
 - **Sites** : liste filtrable (recherche, région, district, statut, vague, type et catégorie de site, retard)
@@ -86,20 +86,21 @@ Ouvrir http://localhost:5173. Vite redirige `/api` et `/socket.io` vers le serve
 
 ```
 server/
-  sql/001_schema.sql          schéma PostgreSQL (tables, vue v_dernier_suivi, 9 étapes)
+  sql/001_schema.sql          schéma PostgreSQL (001 à 004 : tables, vue v_dernier_suivi, catégories, missions)
   src/index.js                démarrage HTTP + Socket.IO
   src/app.js                  application Express
   src/routes/auth.js          connexion (JWT)
   src/routes/api.js           API : tableau de bord, sites, équipe, imports, administration
   src/services/importer.js    lecture de l'extrait Excel + contrôle qualité + enregistrement
-  src/services/statistiques.js  calculs (taux par région/district, vagues, étapes, équipe…)
+  src/services/statistiques.js  calculs (taux par région/district, vagues, catégories, missions, équipe…)
+  src/services/categories.js  catégorie d'un site d'après le sigle de son nom
   src/services/membres.js     rapprochement « Responsable » ↔ membres de l'équipe
   src/scripts/                migrate.js, init.js, import.js
   test/api.test.js            tests sur l'extrait réel du 02/11/2026
 client/
   src/App.jsx                 mise en page, navigation, temps réel
   src/pages/                  VueEnsemble, Sites, EquipeSI, Historique, Importer, Administration, Connexion
-  src/components/Elements.jsx statut, étapes, barre de taux
+  src/components/Elements.jsx statut, catégorie, barre de taux
 ```
 
 ## Modèle de données
