@@ -94,7 +94,7 @@ cp .env.example .env && docker compose up -d --build   # http://localhost:8080
 
 Mise en page type « Argon Dashboard » : `App.jsx` (`Cadre` : menu latéral `MENU`, bandeau `.bandeau`,
 contenu `.contenu` remonté sur le bandeau), icônes SVG maison dans `components/Icones.jsx`, thème en fin de
-`styles.css` (variables `--a-*`, cartes `.panel`, `.stat`, `.carte-sombre`, `.carte-blanche`). Police Open Sans.
+`styles.css` (couleurs du bandeau : `--marine` #0b1f4b et `--bordeaux` #7b1530 ; variables `--a-*`, cartes `.panel`, `.stat`, `.carte-sombre`, `.carte-blanche`). Police Open Sans.
 Ne pas reprendre le logo ni le nom « argon ».
 
 ## Conventions
