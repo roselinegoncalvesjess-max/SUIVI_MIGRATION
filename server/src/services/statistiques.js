@@ -1,5 +1,6 @@
 /** Calculs de synthèse sur un import (par défaut, le dernier). */
 import { query } from '../db.js';
+import { REGIONS_PRIORITAIRES, regionPrioritaire } from './regionsPrioritaires.js';
 
 // « sites », « migres », « en_cours », « non_demarres » ne concernent que les sites à MIGRER.
 // Les nouveaux sites (déploiement direct sur Open mSupply) sont comptés à part.
@@ -46,7 +47,40 @@ export async function regionsEtDistricts(importId) {
     r.districts.push(avecTaux({ id: l.district_id, nom: l.district, debut_mission: l.debut_mission, fin_mission: l.fin_mission, ...Object.fromEntries(CLES.map((k) => [k, l[k]])) }));
   }
   const tri = (a, b) => b.sites - a.sites || a.nom.localeCompare(b.nom, 'fr');
-  return [...regions.values()].map((r) => ({ ...avecTaux(r), districts: r.districts.sort(tri) })).sort(tri);
+  return [...regions.values()]
+    .map((r) => ({ ...avecTaux(r), prioritaire: regionPrioritaire(r.nom) !== null, districts: r.districts.sort(tri) }))
+    .sort(tri);
+}
+
+/**
+ * Point sur les régions prioritaires LHSPLA, à partir de `regionsEtDistricts`.
+ * Les 10 régions sont toujours listées, même absentes de l'extrait (présente = false).
+ * Le taux porte sur les sites de l'extrait : le nombre officiel de sites par région n'est pas connu.
+ */
+export function pointPrioritaires(regions) {
+  const zeros = () => Object.fromEntries(CLES.map((k) => [k, 0]));
+  const cumuler = (liste) => avecTaux(liste.reduce((t, r) => {
+    for (const k of CLES) t[k] += r[k];
+    return t;
+  }, zeros()));
+  const lignes = REGIONS_PRIORITAIRES.map(([nom]) => {
+    // Une région peut apparaître sous plusieurs graphies dans l'extrait
+    const trouvees = regions.filter((r) => regionPrioritaire(r.nom) === nom);
+    const districts = trouvees.flatMap((r) => r.districts);
+    return {
+      nom, id: trouvees[0]?.id ?? null, presente: trouvees.length > 0, ...cumuler(trouvees),
+      districts: districts.length, districts_touches: districts.filter((d) => d.migres > 0).length,
+    };
+  }).sort((a, b) => b.sites - a.sites || a.nom.localeCompare(b.nom, 'fr'));
+  return {
+    regions: lignes,
+    total: cumuler(lignes),
+    autres: cumuler(regions.filter((r) => !r.prioritaire)),
+    nb_regions: lignes.length,
+    regions_presentes: lignes.filter((r) => r.presente).length,
+    regions_touchees: lignes.filter((r) => r.migres > 0).length,
+    regions_completes: lignes.filter((r) => r.complet).length,
+  };
 }
 
 export async function objectifs() {

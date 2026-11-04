@@ -1,6 +1,10 @@
-# CLAUDE.md — Suivi de la migration mSupply → Open mSupply (LHSPLA)
+# CLAUDE.md
 
-Ce fichier donne à Claude Code le contexte du projet. Répondre et commenter le code **en français**.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Suivi de la migration mSupply → Open mSupply (LHSPLA)
+
+Répondre et commenter le code **en français**.
 
 ## Contexte métier
 
@@ -18,6 +22,10 @@ Ce fichier donne à Claude Code le contexte du projet. Répondre et commenter le
 - **Période de migration** = mission par district et par vague : « Début mission » / « Fin mission » (Excel ou
   affectation), sinon MIN(debut_reel) et MAX(fin_reelle des sites terminés).
 - **Taux de migration national** = sites `TERMINE` **de type MIGRATION** du dernier import / `objectif_sites`.
+- **Régions prioritaires LHSPLA** (10 sur 33, `server/src/services/regionsPrioritaires.js`) : ABIDJAN 2,
+  AGNEBY-TIASSA, BELIER, GBEKE, HAUT-SASSANDRA, INDENIE-DJUABLIN, LA ME, LOH-DJIBOUA, PORO, TONKPI. Point dédié
+  à côté du point global ; toujours listées, même absentes de l'extrait. Taux = sites de l'extrait (pas
+  d'objectif officiel par région).
 - **Nouveaux sites** : colonne Excel « Type de site » = « Nouveau site » → `suivi_site.type_site = 'NOUVEAU'`
   (déploiement direct sur Open mSupply). Comptés à part (`nouveaux`, `nouveaux_deployes`) ; toutes les
   statistiques « sites / migres / en_cours / non_demarres » ne portent que sur `MIGRATION`.
@@ -69,6 +77,16 @@ client/   React 18 + Vite, React Router, Recharts, socket.io-client
 Temps réel : après un import ou un changement d'équipe/objectifs, le serveur émet `import` ou
 `equipe` via Socket.IO ; le client recharge les données de la page affichée.
 
+Points de liaison utiles :
+- `creerApp({ notifier })` (`server/src/app.js`) construit l'app Express sans Socket.IO : `index.js` branche
+  le vrai `notifier`, les tests en passent un qui enregistre les événements. `/api/auth` est dans
+  `routes/auth.js`, le reste dans `routes/api.js`. Si `CLIENT_DIST` est défini, le serveur sert aussi `client/dist`.
+- Migrations : `scripts/migrate.js` applique les `sql/*.sql` absents de la table `schema_migrations`
+  (une transaction par fichier, ordre alphabétique) ; `npm run init` l'appelle.
+- Client : `api.js` (fetch `/api…` + jeton JWT dans `localStorage`, erreurs → `ErreurApi`),
+  `tempsReel.js` (`useTempsReel`), `auth.jsx` (session). En dev, Vite relaie `/api` et `/socket.io`
+  vers `API_URL` (défaut `http://localhost:4000`).
+
 ## Commandes
 
 ```bash
@@ -80,6 +98,8 @@ npm run dev                              # http://localhost:4000
 
 # Tests (base dédiée dont le nom contient « test » : elle est VIDÉE)
 DATABASE_URL=postgres://suivi:motdepasse@localhost:5432/suivi_test npm test
+# Un seul test (filtre sur le nom passé à test(…))
+DATABASE_URL=… node --test --test-name-pattern="équipe SI" test/api.test.js
 
 # Interface (dans client/)
 npm install
@@ -105,6 +125,8 @@ Ne pas reprendre le logo ni le nom « argon ».
 - Les routes qui modifient des données vérifient le rôle avec `role('contributeur')` ou `role('admin')`
   et appellent `notifier(...)` pour le temps réel.
 - Après une modification du serveur : lancer `npm test` ; ajouter un test pour toute nouvelle règle.
+  Les tests (`node:test` + supertest) sont séquentiels : `before()` vide le schéma, initialise et importe
+  l'extrait une seule fois, puis les tests partagent cet état. Il n'y a pas de linter.
 - Après une modification de l'interface : `npm run build` doit passer sans erreur.
 
 ## Pistes d'évolution

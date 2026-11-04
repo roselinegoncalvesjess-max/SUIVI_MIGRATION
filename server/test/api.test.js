@@ -9,6 +9,7 @@ import { pool } from '../src/db.js';
 import { creerApp } from '../src/app.js';
 import { initialiser } from '../src/scripts/init.js';
 import { importerExtrait } from '../src/services/importer.js';
+import { regionPrioritaire } from '../src/services/regionsPrioritaires.js';
 
 const EXTRAIT = new URL('./fixtures/extrait_20261102.xlsx', import.meta.url);
 const evenements = [];
@@ -63,6 +64,33 @@ test('tableau de bord : taux, régions et districts', async () => {
   // Période de migration de Korhogo 2 (vague 1) : du premier début réel à la dernière date de migration
   const k2 = r.body.missions.find((m) => m.district === 'KORHOGO 2' && m.vague === 1);
   assert.deepEqual([k2.debut, k2.fin, k2.duree_jours, k2.migres, k2.terminee], ['2026-10-26', '2026-10-29', 4, 16, true]);
+});
+
+test('régions prioritaires : les 10 régions, à côté du point global', async () => {
+  const r = await get('/api/tableau-de-bord');
+  const p = r.body.prioritaires;
+  assert.equal(p.regions.length, 10);
+  assert.deepEqual([p.nb_regions, p.regions_presentes, p.regions_touchees, p.regions_completes], [10, 5, 5, 2]);
+  assert.deepEqual([p.total.sites, p.total.migres, p.total.taux], [349, 191, 54.7]);
+  // Le point prioritaire et les autres régions redonnent le total de l'extrait
+  const s = r.body.synthese;
+  assert.deepEqual([p.total.sites + p.autres.sites, p.total.migres + p.autres.migres], [s.sites, s.migres]);
+  assert.deepEqual([p.autres.sites, p.autres.migres], [30, 30]);
+  const poro = p.regions.find((x) => x.nom === 'PORO');
+  assert.deepEqual([poro.sites, poro.migres, poro.taux, poro.districts, poro.districts_touches], [129, 69, 53.5, 5, 2]);
+  // Une région absente de l'extrait reste listée, sans lien vers ses sites
+  const tonkpi = p.regions.find((x) => x.nom === 'TONKPI');
+  assert.deepEqual([tonkpi.presente, tonkpi.id, tonkpi.sites, tonkpi.taux], [false, null, 0, 0]);
+  assert.equal(r.body.regions.find((x) => x.nom === 'BELIER').prioritaire, true);
+  assert.equal(r.body.regions.find((x) => x.nom === 'BAGOUE').prioritaire, false);
+});
+
+test('régions prioritaires : graphies acceptées', () => {
+  assert.equal(regionPrioritaire('ME'), 'LA ME');
+  assert.equal(regionPrioritaire('la mé'), 'LA ME');
+  assert.equal(regionPrioritaire('Tonpki'), 'TONKPI');
+  assert.equal(regionPrioritaire('Bélier'), 'BELIER');
+  assert.equal(regionPrioritaire('BAGOUE'), null);
 });
 
 test('équipe SI : tous les sites des districts de chaque membre', async () => {

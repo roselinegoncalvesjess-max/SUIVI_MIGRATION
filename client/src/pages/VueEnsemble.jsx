@@ -29,6 +29,8 @@ function Contenu({ d }) {
           pied={s.nouveaux || s.objectif_nouveaux ? <><Variation n={s.evolution_nouveaux} /> déployés directement sur Open mSupply</> : <>Aucun dans l'extrait · {s.en_cours} migrations en cours</>} />
       </div>
 
+      <RegionsPrioritaires p={d.prioritaires} synthese={s} />
+
       <div className="graphes">
         <GrapheRythme rythme={d.rythme} total={s.sites} />
         <GrapheRegions regions={d.regions} />
@@ -83,6 +85,42 @@ function Contenu({ d }) {
   );
 }
 
+function RegionsPrioritaires({ p, synthese }) {
+  const navigate = useNavigate();
+  const absentes = p.nb_regions - p.regions_presentes;
+  return (
+    <section className="panel prioritaires">
+      <h2><span className="badge-prio">Prioritaires</span> Point sur les {p.nb_regions} régions prioritaires LHSPLA</h2>
+      <p className="sub">Taux calculé sur les sites présents dans l'extrait : le nombre officiel de sites par région n'est pas encore connu. Cliquez une région pour voir ses sites.</p>
+      <div className="prio-chiffres">
+        <div><strong>{p.regions_touchees} <small>/ {p.nb_regions}</small></strong><span>régions avec au moins un site migré</span></div>
+        <div><strong>{p.regions_completes}</strong><span>régions entièrement migrées</span></div>
+        <div><strong>{fmtN(p.total.migres)} <small>/ {fmtN(p.total.sites)}</small></strong><span>sites migrés ({fmtPct(p.total.taux)})</span></div>
+        <div><strong>{fmtPct(synthese.migres ? (100 * p.total.migres) / synthese.migres : 0)}</strong><span>des sites migrés du pays</span></div>
+      </div>
+      <div className="tablewrap"><table>
+        <thead><tr><th>Région</th><th className="r">Districts<br /><span style={{ fontWeight: 400 }}>touchés / suivis</span></th><th className="r">Sites à migrer</th><th className="r">Sites migrés</th><th>Taux de migration</th><th className="r">En cours</th><th className="r">Non démarrés</th><th className="r">Nouveaux sites<br /><span style={{ fontWeight: 400 }}>déployés / total</span></th></tr></thead>
+        <tbody>
+          {p.regions.map((r) => (r.presente ? (
+            <tr key={r.nom} className="click" onClick={() => navigate(`/sites?region=${r.id}`)}>
+              <td>{r.nom}</td><td className="r num">{r.districts_touches} / {r.districts}</td>
+              <td className="r num">{r.sites}</td><td className="r num">{r.migres}</td>
+              <td><Taux valeur={r.taux} complet={r.complet} gras /></td>
+              <td className="r num">{r.en_cours}</td><td className="r num">{r.non_demarres}</td>
+              <td className="r num">{r.nouveaux ? `${r.nouveaux_deployes} / ${r.nouveaux}` : '—'}</td>
+            </tr>
+          ) : (
+            <tr key={r.nom} className="absente"><td>{r.nom}</td><td colSpan={7}>Aucun site dans l'extrait</td></tr>
+          )))}
+          <tr className="total"><td>Total des {p.nb_regions} régions prioritaires</td><td /><td className="r num">{fmtN(p.total.sites)}</td><td className="r num">{fmtN(p.total.migres)}</td><td>{fmtPct(p.total.taux)}</td><td className="r num">{p.total.en_cours}</td><td className="r num">{p.total.non_demarres}</td><td className="r num">{p.total.nouveaux ? `${p.total.nouveaux_deployes} / ${p.total.nouveaux}` : '—'}</td></tr>
+          <tr className="autres"><td>Autres régions de l'extrait</td><td /><td className="r num">{fmtN(p.autres.sites)}</td><td className="r num">{fmtN(p.autres.migres)}</td><td>{fmtPct(p.autres.taux)}</td><td className="r num">{p.autres.en_cours}</td><td className="r num">{p.autres.non_demarres}</td><td className="r num">{p.autres.nouveaux ? `${p.autres.nouveaux_deployes} / ${p.autres.nouveaux}` : '—'}</td></tr>
+        </tbody>
+      </table></div>
+      {absentes > 0 && <p className="sub" style={{ marginTop: 8 }}>{absentes} région{absentes > 1 ? 's' : ''} prioritaire{absentes > 1 ? 's' : ''} sans aucun site dans l'extrait : avancement inconnu, pas forcément nul.</p>}
+    </section>
+  );
+}
+
 function RegionsDistricts({ regions, total }) {
   const [ouvertes, setOuvertes] = useState(() => new Set());
   const navigate = useNavigate();
@@ -105,7 +143,7 @@ function RegionsDistricts({ regions, total }) {
           {regions.map((r) => (
             <Fragment key={r.id}>
               <tr className="region" onClick={() => basculer(r.id)} onKeyDown={(e) => e.key === 'Enter' && basculer(r.id)} tabIndex={0} aria-expanded={ouvertes.has(r.id)}>
-                <td><span className={`caret ${ouvertes.has(r.id) ? 'ouvert' : ''}`}>▸</span>{r.nom} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>· {r.districts.length} district{r.districts.length > 1 ? 's' : ''}</span></td>
+                <td><span className={`caret ${ouvertes.has(r.id) ? 'ouvert' : ''}`}>▸</span>{r.nom} {r.prioritaire && <span className="badge-prio">Prioritaire</span>}<span style={{ color: 'var(--muted)', fontWeight: 400 }}>· {r.districts.length} district{r.districts.length > 1 ? 's' : ''}</span></td>
                 <td className="r num">{r.sites}</td><td className="r num">{r.migres}</td>
                 <td><Taux valeur={r.taux} complet={r.complet} gras /></td>
                 <td className="r num">{r.en_cours}</td><td className="r num">{r.non_demarres}</td>

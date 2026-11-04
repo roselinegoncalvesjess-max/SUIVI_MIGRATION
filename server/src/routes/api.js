@@ -28,7 +28,7 @@ export default function api(notifier = () => {}) {
       stats.synthese(req.imp), stats.regionsEtDistricts(id), stats.parVague(id), stats.parCategorie(id), stats.missions(id), stats.rythme(id),
     ]);
     const retards = await stats.sites(id, { retard: '1' });
-    res.json({ import: req.imp, synthese, regions, vagues, categories, missions, rythme, retards });
+    res.json({ import: req.imp, synthese, regions, prioritaires: stats.pointPrioritaires(regions), vagues, categories, missions, rythme, retards });
   }));
 
   r.get('/sites', avecImport, asynchrone(async (req, res) => {

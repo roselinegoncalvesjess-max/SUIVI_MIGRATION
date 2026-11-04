@@ -230,3 +230,13 @@ tr.region td{background:#f8f9fe}
 .voile{display:none}
 @media (max-width:575px){.stat-cartes{grid-template-columns:1fr}.utilisateur .nom{display:none}}
 @media (prefers-reduced-motion:reduce){.btn,.sidenav{transition:none}}
+/* Régions prioritaires LHSPLA */
+.badge-prio{display:inline-block;background:#f7e6ea;color:var(--bordeaux);font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;margin-right:6px;vertical-align:1px;text-transform:uppercase;letter-spacing:.02em}
+.panel.prioritaires{border-left:3px solid var(--bordeaux)}
+.prio-chiffres{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.prio-chiffres>div{display:flex;flex-direction:column;gap:2px}
+.prio-chiffres strong{font-size:24px;font-weight:700;color:var(--marine);font-variant-numeric:tabular-nums}
+.prio-chiffres small{font-size:14px;font-weight:500;color:var(--muted)}
+.prio-chiffres span{font-size:12.5px;color:var(--muted)}
+tr.absente td{color:var(--muted);font-style:italic}
+tr.autres td{color:var(--muted)}
