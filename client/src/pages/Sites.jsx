@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Etat, useDonnees } from '../App.jsx';
-import { CATEGORIES, STATUTS, api, fmtDate, fmtPeriode } from '../api.js';
+import { CATEGORIES, STATUTS, api, fmtDate, fmtPct, fmtPeriode } from '../api.js';
 import { Categorie, Statut } from '../components/Elements.jsx';
 
 const CHAMPS = ['q', 'region', 'district', 'statut', 'vague', 'type', 'categorie', 'retard'];
@@ -65,6 +65,7 @@ export default function Sites() {
         <button className="btn" type="button" onClick={() => { setQ(''); setParams({}, { replace: true }); }}>Réinitialiser</button>
         {etat.donnees && <span className="sub" style={{ margin: '0 0 0 auto' }}>{etat.donnees.sites.length} site{etat.donnees.sites.length > 1 ? 's' : ''}</span>}
       </div>
+      {params.get('vague') && <ResumeVague vague={params.get('vague')} params={params} changer={changer} />}
       <Etat etat={etat}>{(d) => (
         <div className="tablewrap" style={{ maxHeight: '70vh', overflow: 'auto' }}><table>
           <thead><tr><th>Site</th><th>Région</th><th>District</th><th>Vague</th><th>Responsable</th><th>Catégorie</th><th>Statut</th><th>Prévu le</th><th>Date de migration</th><th>Mission</th></tr></thead>
@@ -84,5 +85,67 @@ export default function Sites() {
         </table></div>
       )}</Etat>
     </section>
+  );
+}
+
+const TYPES = { MIGRATION: 'Migration', NOUVEAU: 'Nouveau site' };
+
+/** Résumé d'une vague : ses sites par région, district, statut, type et catégorie. Un clic sur une ligne filtre la liste. */
+function ResumeVague({ vague, params, changer }) {
+  const etat = useDonnees(`/sites?vague=${encodeURIComponent(vague)}`);
+  const sites = etat.donnees?.sites;
+  const facettes = useMemo(() => {
+    if (!sites) return null;
+    const grouper = (champ, libelle) => {
+      const m = new Map();
+      for (const s of sites) {
+        const v = s[champ];
+        if (v === null || v === undefined) continue;
+        if (!m.has(v)) m.set(v, { cle: String(v), libelle: libelle(s), n: 0, migres: 0 });
+        const g = m.get(v);
+        g.n++;
+        if (s.statut === 'TERMINE' && s.type_site === 'MIGRATION') g.migres++;
+      }
+      return [...m.values()].sort((a, b) => b.n - a.n || a.libelle.localeCompare(b.libelle, 'fr'));
+    };
+    return {
+      region: grouper('region_id', (s) => s.region), district: grouper('district_id', (s) => s.district),
+      statut: grouper('statut', (s) => STATUTS[s.statut] || s.statut), type: grouper('type_site', (s) => TYPES[s.type_site] || s.type_site),
+      categorie: grouper('categorie', (s) => CATEGORIES[s.categorie] || s.categorie),
+    };
+  }, [sites]);
+  if (!sites) return null;
+
+  const aMigrer = sites.filter((s) => s.type_site === 'MIGRATION');
+  const migres = aMigrer.filter((s) => s.statut === 'TERMINE').length;
+  const colonne = (titre, champ, param, avecMigres) => (
+    <div className="facette">
+      <h4>{titre} ({facettes[champ].length})</h4>
+      <div className="liste"><table>
+        <thead><tr><th /><th>Sites</th>{avecMigres && <th>Migrés</th>}</tr></thead>
+        <tbody>{facettes[champ].map((g) => (
+          <tr key={g.cle} className={params.get(param) === g.cle ? 'actif' : ''} onClick={() => changer(param, params.get(param) === g.cle ? '' : g.cle)}>
+            <td>{g.libelle}</td><td className="r num">{g.n}</td>{avecMigres && <td className="r num">{g.migres}</td>}
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </div>
+  );
+  return (
+    <div className="resume-vague">
+      <h3><span className="chip">Vague {vague}</span> Résumé de la vague</h3>
+      <p className="sub">
+        {sites.length} site{sites.length > 1 ? 's' : ''} · {migres} migré{migres > 1 ? 's' : ''} sur {aMigrer.length} à migrer ({fmtPct(aMigrer.length ? (100 * migres) / aMigrer.length : 0)})
+        · {facettes.region.length} région{facettes.region.length > 1 ? 's' : ''} · {facettes.district.length} district{facettes.district.length > 1 ? 's' : ''}.
+        Cliquez une ligne pour filtrer la liste.
+      </p>
+      <div className="resume-grille">
+        {colonne('Régions', 'region', 'region', true)}
+        {colonne('Districts', 'district', 'district', true)}
+        {colonne('Statuts', 'statut', 'statut', false)}
+        {colonne('Types', 'type', 'type', false)}
+        {colonne('Catégories', 'categorie', 'categorie', true)}
+      </div>
+    </div>
   );
 }

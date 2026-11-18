@@ -69,23 +69,26 @@ function Cadre() {
   const [toast, setToast] = useState('');
   const [dernier, setDernier] = useState(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
-  const [recherche, setRecherche] = useState('');
+  const [vagues, setVagues] = useState([]);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const enDirect = useTempsReel((e) => {
     setRevision((r) => r + 1);
-    setToast(e === 'import' ? 'Nouvel extrait importé : les chiffres sont à jour.' : 'Équipe SI mise à jour.');
+    setToast({ import: 'Nouvel extrait importé : les chiffres sont à jour.', referentiel: 'Référentiel des dépôts mis à jour : les taux sont recalculés.', nouveaux: 'Liste des nouveaux sites mise à jour.', corrections: 'Corrections manuelles mises à jour : les chiffres sont recalculés.' }[e] || 'Équipe SI mise à jour.');
     setTimeout(() => setToast(''), 4000);
   });
   useEffect(() => {
     api('/historique').then((d) => setDernier(d.imports[0] || null)).catch(() => {});
   }, [revision]);
+  useEffect(() => {
+    api('/filtres').then((d) => setVagues(d.vagues)).catch(() => {});
+  }, [revision]);
   useEffect(() => { setMenuOuvert(false); }, [pathname]);
 
-  const chercher = (e) => {
-    e.preventDefault();
-    navigate(`/sites${recherche.trim() ? `?q=${encodeURIComponent(recherche.trim())}` : ''}`);
-  };
+  // Filtre de vague du bandeau : réservé au tableau de bord (les pages Sites et Carte ont le leur)
+  const surTableauDeBord = pathname === '/';
+  const vague = new URLSearchParams(search).get('vague') || '';
+  const changerVague = (v) => navigate({ pathname: '/', search: v ? `?vague=${v}` : '' }, { replace: true });
 
   return (
     <RevisionCtx.Provider value={revision}>
@@ -123,10 +126,14 @@ function Cadre() {
             <div className="bandeau-haut">
               <button className="btn-menu" type="button" aria-label="Ouvrir le menu" onClick={() => setMenuOuvert(true)}><Ic.IcMenu /></button>
               <h1>{TITRES[pathname] || 'Tableau de bord'}</h1>
-              <form className="recherche" onSubmit={chercher} role="search">
-                <Ic.IcRecherche />
-                <input type="search" placeholder="Rechercher un site, un district…" aria-label="Rechercher un site" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
-              </form>
+              {surTableauDeBord ? (
+                <div className="recherche" role="group" aria-label="Filtre de vague">
+                  <select aria-label="Vague de migration" value={vague} onChange={(e) => changerVague(e.target.value)}>
+                    <option value="">Toutes les vagues de migration</option>
+                    {vagues.map((v) => <option key={v} value={v}>Vague {v}</option>)}
+                  </select>
+                </div>
+              ) : <span className="bandeau-espace" />}
               <div className="utilisateur">
                 <span className="avatar" aria-hidden="true">{initiales(utilisateur.nom)}</span>
                 <span className="nom">{utilisateur.nom}</span>

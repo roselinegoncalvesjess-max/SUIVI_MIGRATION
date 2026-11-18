@@ -2,3 +2,9 @@ node_modules/
 dist/
 .env
 *.log
+
+# Fichiers sources des cartes (shapefiles) : seul districts_geo.json est versionné
+Données régions et districts/
+
+# Fichiers de données Excel de l'équipe (extraits, listes de sites) : non versionnés
+FICHIER EXCEL/

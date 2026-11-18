@@ -12,6 +12,9 @@ import ExcelJS from 'exceljs';
 import { transaction } from '../db.js';
 import { Rapprochement, normaliser } from './membres.js';
 import { categorieDuNom, categorieSaisie } from './categories.js';
+import { districtOfficiel, regionOfficielle } from './officiel.js';
+import { classerNouveaux, contexteNouveaux } from './classementNouveaux.js';
+import { corrigerZones } from './corrigerZones.js';
 
 export class ErreurImport extends Error {}
 
@@ -49,7 +52,28 @@ export function texte(v) {
   v = brut(v);
   if (v === null) return '';
   if (v instanceof Date) return `${pad(v.getUTCDate())}/${pad(v.getUTCMonth() + 1)}/${v.getUTCFullYear()}`;
-  return String(v).trim();
+  return reparerEncodage(String(v).trim());
+}
+
+// Caractères Windows-1252 (0x80–0x9F) et leur octet, pour défaire un double encodage
+const CP1252 = new Map([...'€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'].map((c, i) => [c, [0x80, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+  0x8a, 0x8b, 0x8c, 0x8e, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9e, 0x9f][i]]));
+
+/**
+ * Texte UTF-8 relu comme Windows-1252 (« dÃ©pot », « BLÃŠ ») : rendu lisible (« dépot », « BLÊ »).
+ * Un texte correct, ou qui ne se décode pas proprement, est laissé tel quel.
+ */
+export function reparerEncodage(s) {
+  if (!/[ÃÂ][\u0080-¿Œ-™]/.test(s)) return s;
+  const octets = [];
+  for (const c of s) {
+    const code = c.codePointAt(0);
+    if (code < 0x100) octets.push(code);
+    else if (CP1252.has(c)) octets.push(CP1252.get(c));
+    else return s;
+  }
+  const r = Buffer.from(octets).toString('utf8');
+  return r.includes('�') ? s : r;
 }
 
 /** Renvoie une date « AAAA-MM-JJ » ou null. */
@@ -191,10 +215,32 @@ export function controlerQualite(sites) {
   return avert;
 }
 
+/**
+ * Ramène région et district de chaque site aux noms OFFICIELS (le district fixe la région : YOPOUGON-EST est dans
+ * ABIDJAN 1). Renvoie un avertissement par district dont la région de l'extrait était fausse.
+ */
+export function normaliserZones(sites) {
+  const corriges = new Map();
+  for (const s of sites) {
+    const d = districtOfficiel(s.district);
+    if (!d) continue;
+    if (regionOfficielle(s.region) !== d.region) {
+      const cle = `${d.district}|${s.region}`;
+      if (!corriges.has(cle)) corriges.set(cle, { district: d.district, extrait: s.region, officielle: d.region, n: 0 });
+      corriges.get(cle).n++;
+    }
+    s.district = d.district;
+    s.region = d.region;
+  }
+  return [...corriges.values()].map((c) => `${c.district} : région « ${c.extrait} » dans l'extrait, rattaché à ${c.officielle} d'après la carte officielle (${c.n} site${c.n > 1 ? 's' : ''}).`);
+}
+
 // ------------------------------------------------------------ enregistrement
 export async function importerExtrait(buffer, nomFichier, utilisateurId = null) {
   const donnees = await lireClasseur(buffer);
-  const avertissements = controlerQualite(donnees.sites);
+  const corrections = normaliserZones(donnees.sites);
+  corrections.push(...classerNouveaux(donnees.sites, await contexteNouveaux()));
+  const avertissements = [...controlerQualite(donnees.sites), ...corrections];
 
   return transaction(async (c) => {
     const rapprochement = await Rapprochement.charger(c);
@@ -261,6 +307,7 @@ export async function importerExtrait(buffer, nomFichier, utilisateurId = null) 
        WHERE id = $1 RETURNING *`,
       [imp.id, suivis.length - nouveaux.total, compte.TERMINE, compte.EN_COURS, compte.NON_DEMARRE,
         nouveaux.total, nouveaux.deployes]);
+    await corrigerZones(c); // plus de district rangé dans une mauvaise région (ou en double) après un changement de région
     return { import: fin, avertissements };
   });
 }

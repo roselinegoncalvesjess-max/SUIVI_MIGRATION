@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api, fmtPeriode } from '../api.js';
+import ListeAdmin, { CFG_NOUVEAUX, CFG_REFERENTIEL } from './ListeAdmin.jsx';
+import Corrections from './Corrections.jsx';
 
 export default function Administration() {
   return (
     <>
       <Objectifs />
+      <ListeAdmin cfg={CFG_REFERENTIEL} />
+      <ListeAdmin cfg={CFG_NOUVEAUX} />
+      <Corrections />
       <Membres />
       <Utilisateurs />
     </>

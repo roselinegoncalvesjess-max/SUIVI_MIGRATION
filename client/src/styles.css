@@ -101,6 +101,8 @@ tr.region td:first-child{cursor:pointer}
 .cat-ESPC{background:#e7f6ef;border-color:#bfe5d3;color:#0b6b46}
 .cat-DISTRICT_SANITAIRE{background:#fff3df;border-color:#f3d7a5;color:#8a5a00}
 .cat-HOPITAL_REFERENCE{background:#e3eef9;border-color:#bcd4ee;color:#1d5fa6}
+.cat-CMS{background:#f3ecfa;border-color:#d9c6ee;color:#6a3d9a}
+.cat-INHP{background:#fde9ee;border-color:#f3bccb;color:#a3213f}
 .cat-A_CLASSER{background:#f4f6f7;color:#7d8a91;border-style:dashed}
 tbody tr.click{cursor:pointer}
 tbody tr.click:hover{background:var(--accent-soft)}
@@ -157,6 +159,8 @@ body{background:var(--bg);color:var(--ink-2);font-family:var(--font)}
 .recherche{margin-left:auto;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.45);border-radius:2rem;padding:7px 14px;width:min(320px,100%)}
 .recherche input{background:none;border:0;outline:0;color:#fff;font:14px var(--font);width:100%}
 .recherche input::placeholder{color:rgba(255,255,255,.8)}
+.recherche select{background:none;border:0;outline:0;color:#fff;font:14px var(--font);width:100%;cursor:pointer;box-shadow:none}
+.recherche select option{color:#32325d;background:#fff}
 .recherche:focus-within{background:rgba(255,255,255,.22)}
 .utilisateur{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
 .avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#fff;color:var(--bordeaux);font-weight:700;font-size:13px;box-shadow:var(--ombre-forte)}
@@ -230,6 +234,35 @@ tr.region td{background:#f8f9fe}
 .voile{display:none}
 @media (max-width:575px){.stat-cartes{grid-template-columns:1fr}.utilisateur .nom{display:none}}
 @media (prefers-reduced-motion:reduce){.btn,.sidenav{transition:none}}
+.bandeau-espace{margin-left:auto}
+/* Résumé d'une vague sur la page Sites */
+.resume-vague{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#f9fbfd}
+.resume-vague h3{margin:0;font-size:15px;color:var(--marine)}
+.resume-vague .sub{margin:2px 0 10px}
+.resume-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.facette h4{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.facette .liste{max-height:190px;overflow:auto}
+.facette table{width:100%;font-size:12.5px;border-collapse:collapse}
+.facette th{font-size:11px;font-weight:600;color:var(--muted);text-align:right;padding:0 4px 2px}
+.facette td{padding:3px 4px;border-top:1px solid var(--line)}
+.facette tbody tr{cursor:pointer}
+.facette tbody tr:hover td{background:#eef4fb}
+.facette tr.actif td{font-weight:700;background:#e3ecfa}
+/* Deux cartes côte à côte */
+.carte2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+@media (max-width:1000px){.carte2{grid-template-columns:1fr}}
+.carte-bloc{background:#fff;border-radius:var(--rayon,10px);padding:14px 14px 10px;box-shadow:0 0 2rem 0 rgba(136,152,170,.15);min-width:0}
+.carte-titre h3{margin:0;font-size:15px;color:var(--marine)}
+.carte-titre .sub{margin:2px 0 10px}
+.carte-bloc{margin-bottom:16px}
+.carte-bloc .mapsvg{height:min(80vh,860px)}
+.legende-ligne{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+.legende-ligne b{color:var(--ink-2)}
+.legende-ligne span{display:inline-flex;align-items:center;gap:6px}
+.legende-ligne i{display:inline-block;width:14px;height:12px;border-radius:3px;border:1px solid #8c99a1;flex:none}
+.legende-ligne i.rond{border-radius:50%;border-color:#fff;box-shadow:0 0 0 1px #8c99a1}
+.legende-ligne i.hachure{background:repeating-linear-gradient(45deg,#f1f3f4 0 3px,#d2d8dc 3px 5px)}
+.legende-ligne i.contour{background:#fff;border-width:2px}
 /* Régions prioritaires LHSPLA */
 .badge-prio{display:inline-block;background:#f7e6ea;color:var(--bordeaux);font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;margin-right:6px;vertical-align:1px;text-transform:uppercase;letter-spacing:.02em}
 .panel.prioritaires{border-left:3px solid var(--bordeaux)}

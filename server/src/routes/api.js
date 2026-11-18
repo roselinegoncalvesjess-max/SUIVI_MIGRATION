@@ -6,6 +6,11 @@ import { connecte, role } from '../middleware/auth.js';
 import { ErreurImport, importerExtrait } from '../services/importer.js';
 import { rapprocherTout } from '../services/membres.js';
 import * as stats from '../services/statistiques.js';
+import { REGIONS_PRIORITAIRES } from '../services/regionsPrioritaires.js';
+import { effectifsAMigrer, importerReferentiel, referentielActuel } from '../services/referentiel.js';
+import { importerNouveaux, nouveauxActuels, nouveauxEnPlus } from '../services/nouveauxSites.js';
+import { DECISIONS, enregistrerCorrection, listeCorrections, supprimerCorrection } from '../services/corrections.js';
+import { reclasserNouveaux } from '../scripts/reclasser.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const asynchrone = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -24,11 +29,25 @@ export default function api(notifier = () => {}) {
 
   r.get('/tableau-de-bord', avecImport, asynchrone(async (req, res) => {
     const id = req.imp.id;
+    // ?vague=N limite le tableau de bord à une vague de migration (le tableau « par vague » reste complet)
+    const vague = /^\d+$/.test(req.query.vague || '') ? Number(req.query.vague) : null;
     const [synthese, regions, vagues, categories, missions, rythme] = await Promise.all([
-      stats.synthese(req.imp), stats.regionsEtDistricts(id), stats.parVague(id), stats.parCategorie(id), stats.missions(id), stats.rythme(id),
+      stats.synthese(req.imp, vague), stats.regionsEtDistricts(id, vague), stats.parVague(id), stats.parCategorie(id, vague),
+      stats.missions(id, vague), stats.rythme(id, vague),
     ]);
-    const retards = await stats.sites(id, { retard: '1' });
-    res.json({ import: req.imp, synthese, regions, prioritaires: stats.pointPrioritaires(regions), vagues, categories, missions, rythme, retards });
+    const retards = await stats.sites(id, { retard: '1', vague: vague === null ? '' : String(vague) });
+    // + dépôts du référentiel et nouveaux sites de la liste permanente, s'ils sont chargés
+    const regionsRef = await stats.avecReferentiel(regions, vague, id);
+    const nouveauxListe = vague === null ? (await nouveauxEnPlus(id)).sites : [];
+    if (regionsRef.some((r) => r.depots !== null && r.depots !== undefined)) {
+      // Avec le référentiel, le total national est la somme des bases des districts : il colle au tableau par région
+      const base = regionsRef.reduce((s, r) => s + r.base, 0);
+      Object.assign(synthese, { base_depots: base, taux_depots: stats.taux(synthese.migres, base), sites_restants: Math.max(base - synthese.migres, 0) });
+    }
+    res.json({
+      import: req.imp, vague, synthese, regions: regionsRef, prioritaires: stats.pointPrioritaires(regionsRef), vagues, categories, missions, rythme, retards,
+      nouveaux_sites: nouveauxListe,
+    });
   }));
 
   r.get('/sites', avecImport, asynchrone(async (req, res) => {
@@ -40,7 +59,62 @@ export default function api(notifier = () => {}) {
     const { rows: districts } = await query('SELECT id, nom, region_id FROM district ORDER BY nom');
     const { rows: vagues } = await query(
       'SELECT DISTINCT vague FROM suivi_site WHERE import_id = $1 AND vague IS NOT NULL ORDER BY vague', [req.imp.id]);
-    res.json({ regions, districts, vagues: vagues.map((v) => v.vague) });
+    res.json({ regions, districts, vagues: vagues.map((v) => v.vague), prioritaires: REGIONS_PRIORITAIRES.map(([nom]) => nom), referentiel: await effectifsAMigrer(req.imp.id),
+      nouveaux: [...(await nouveauxEnPlus(req.imp.id)).parDistrict].map(([cle, n]) => { const [region, district] = cle.split('|'); return { region, district, n }; }),
+      // Sites corrigés « migré » absents de l'extrait (la carte les compte suivis et migrés)
+      migres_hors_extrait: [...(await stats.migresHors(req.imp.id)).parDistrict].map(([cle, n]) => { const [region, district] = cle.split('|'); return { region, district, n }; }) });
+  }));
+
+  // Corrections manuelles sur des sites (migré, ancien site, nouveau site) : appliquées aussitôt aux imports existants
+  r.get('/corrections', asynchrone(async (req, res) => res.json({ corrections: await listeCorrections(), decisions: DECISIONS })));
+
+  r.post('/corrections', role('admin'), asynchrone(async (req, res) => {
+    try {
+      const correction = await enregistrerCorrection(req.body || {}, req.utilisateur.id);
+      const modifies = await reclasserNouveaux();
+      notifier('corrections', {});
+      res.status(201).json({ correction, modifies, corrections: await listeCorrections() });
+    } catch (e) {
+      if (e instanceof ErreurImport) return res.status(400).json({ erreur: e.message });
+      throw e;
+    }
+  }));
+
+  r.delete('/corrections/:id', role('admin'), asynchrone(async (req, res) => {
+    if (!(await supprimerCorrection(+req.params.id))) return res.status(404).json({ erreur: 'Correction introuvable.' });
+    await reclasserNouveaux();
+    notifier('corrections', {});
+    res.json({ corrections: await listeCorrections() });
+  }));
+
+  // Liste permanente des nouveaux sites (sans version commerciale, à déployer sur Open mSupply)
+  r.get('/nouveaux-sites', asynchrone(async (req, res) => res.json({ liste: await nouveauxActuels() })));
+
+  r.post('/nouveaux-sites', role('admin'), upload.single('fichier'), asynchrone(async (req, res) => {
+    if (!req.file) return res.status(400).json({ erreur: 'Aucun fichier reçu (champ « fichier »).' });
+    try {
+      const resultat = await importerNouveaux(req.file.buffer, req.file.originalname, req.utilisateur.id);
+      notifier('nouveaux', { id: resultat.import.id });
+      res.status(201).json({ liste: await nouveauxActuels(), avertissements: resultat.avertissements });
+    } catch (e) {
+      if (e instanceof ErreurImport) return res.status(400).json({ erreur: e.message });
+      throw e;
+    }
+  }));
+
+  // Référentiel des dépôts déployés sur mSupply (nombre réel de sites par district et région)
+  r.get('/referentiel', asynchrone(async (req, res) => res.json({ referentiel: await referentielActuel() })));
+
+  r.post('/referentiel', role('admin'), upload.single('fichier'), asynchrone(async (req, res) => {
+    if (!req.file) return res.status(400).json({ erreur: 'Aucun fichier reçu (champ « fichier »).' });
+    try {
+      const resultat = await importerReferentiel(req.file.buffer, req.file.originalname, req.utilisateur.id);
+      notifier('referentiel', { id: resultat.import.id });
+      res.status(201).json({ referentiel: await referentielActuel(), avertissements: resultat.avertissements });
+    } catch (e) {
+      if (e instanceof ErreurImport) return res.status(400).json({ erreur: e.message });
+      throw e;
+    }
   }));
 
   r.get('/equipe-si', avecImport, asynchrone(async (req, res) => {

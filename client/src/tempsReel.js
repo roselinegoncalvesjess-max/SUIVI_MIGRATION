@@ -18,6 +18,9 @@ export function useTempsReel(surEvenement) {
     socket.on('connect_error', () => setConnecte(false));
     socket.on('import', () => rappel.current?.('import'));
     socket.on('equipe', () => rappel.current?.('equipe'));
+    socket.on('referentiel', () => rappel.current?.('referentiel'));
+    socket.on('nouveaux', () => rappel.current?.('nouveaux'));
+    socket.on('corrections', () => rappel.current?.('corrections'));
     return () => socket.disconnect();
   }, []);
   return connecte;

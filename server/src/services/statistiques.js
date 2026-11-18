@@ -1,6 +1,11 @@
 /** Calculs de synthèse sur un import (par défaut, le dernier). */
 import { query } from '../db.js';
 import { REGIONS_PRIORITAIRES, regionPrioritaire } from './regionsPrioritaires.js';
+import { districtOfficiel, regionOfficielle } from './officiel.js';
+import { effectifsAMigrer } from './referentiel.js';
+import { nouveauxEnPlus } from './nouveauxSites.js';
+import { contexteNouveaux, migresHorsExtrait } from './classementNouveaux.js';
+import { CATEGORIES } from './categories.js';
 
 // « sites », « migres », « en_cours », « non_demarres » ne concernent que les sites à MIGRER.
 // Les nouveaux sites (déploiement direct sur Open mSupply) sont comptés à part.
@@ -31,12 +36,15 @@ export async function dernierImport() {
   return rows[0] || null;
 }
 
-export async function regionsEtDistricts(importId) {
+// Filtre facultatif sur la vague de migration : `$2` vaut null (toutes les vagues) ou le numéro de vague.
+const VAGUE = 'AND ($2::int IS NULL OR s.vague = $2)';
+
+export async function regionsEtDistricts(importId, vague = null) {
   const { rows } = await query(
     `SELECT r.id AS region_id, r.nom AS region, d.id AS district_id, d.nom AS district, ${COMPTES},
        COALESCE(MIN(s.debut_mission), MIN(s.debut_reel)) AS debut_mission,
        COALESCE(MAX(s.fin_mission), MAX(s.fin_reelle) FILTER (WHERE s.statut = 'TERMINE')) AS fin_mission
-     ${JOINTURES} WHERE s.import_id = $1 GROUP BY r.id, r.nom, d.id, d.nom`, [importId]);
+     ${JOINTURES} WHERE s.import_id = $1 ${VAGUE} GROUP BY r.id, r.nom, d.id, d.nom`, [importId, vague]);
   const regions = new Map();
   for (const l of rows) {
     if (!regions.has(l.region_id)) {
@@ -52,26 +60,96 @@ export async function regionsEtDistricts(importId) {
     .sort(tri);
 }
 
+/** Sites corrigés « migré » absents de l'extrait `importId` (voir classementNouveaux.migresHorsExtrait). */
+export async function migresHors(importId) {
+  const ctx = await contexteNouveaux();
+  if (!ctx.corrections.some((c) => c.decision === 'MIGRE')) return { total: 0, parDistrict: new Map(), sites: [] };
+  const { rows } = await query(
+    `SELECT si.nom, d.nom AS district FROM suivi_site s JOIN site si ON si.id = s.site_id JOIN district d ON d.id = si.district_id
+     WHERE s.import_id = $1`, [importId]);
+  return migresHorsExtrait(ctx, rows);
+}
+
+const zeros = () => Object.fromEntries(CLES.map((k) => [k, 0]));
+const lignesVides = () => ({ ...zeros(), taux: 0, complet: false, debut_mission: null, fin_mission: null });
+
 /**
- * Point sur les régions prioritaires LHSPLA, à partir de `regionsEtDistricts`.
+ * Complète régions et districts avec le référentiel des dépôts mSupply (nombre réel de sites à migrer) :
+ * `depots` (référentiel), `base` (= le plus grand de dépôts et sites de l'extrait, pour qu'un taux ne dépasse
+ * jamais 100 %) et `taux` calculé sur cette base (`taux_extrait` garde l'ancien taux, sur les seuls sites de l'extrait).
+ * Les districts sont regroupés selon la géographie OFFICIELLE (le district fixe la région) et ceux qui sont absents
+ * de l'extrait sont ajoutés avec 0 site suivi. Sans référentiel, ou avec une vague choisie (le référentiel ne connaît
+ * pas les vagues), les régions sont renvoyées telles quelles.
+ */
+export async function avecReferentiel(regions, vague = null, importId = null) {
+  const eff = vague === null ? await effectifsAMigrer(importId) : [];
+  // Nouveaux sites de la liste permanente, absents de l'extrait (la liste ne connaît pas les vagues)
+  const nv = vague === null && importId !== null ? await nouveauxEnPlus(importId)
+    : { total: 0, parDistrict: new Map(), parDistrictDeployes: new Map() };
+  // Sites corrigés « migré » hors extrait
+  const hors = vague === null && importId !== null ? await migresHors(importId) : { total: 0, parDistrict: new Map() };
+  if (!eff.length && !nv.total && !hors.total) return regions;
+  const depotsDistrict = new Map(eff.map((e) => [`${e.region}|${e.district}`, e.n]));
+  const idRegion = new Map(regions.map((r) => [regionOfficielle(r.nom) ?? r.nom, r.id]));
+  const suivis = new Map();
+  for (const r of regions) {
+    for (const d of r.districts) {
+      const o = districtOfficiel(d.nom);
+      const reg = o?.region ?? regionOfficielle(r.nom) ?? r.nom;
+      const nom = o?.district ?? d.nom;
+      suivis.set(`${reg}|${nom}`, { ...d, nom });
+    }
+  }
+  const parRegion = new Map();
+  for (const cle of new Set([...suivis.keys(), ...depotsDistrict.keys(), ...nv.parDistrict.keys(), ...hors.parDistrict.keys()])) {
+    const [reg, nom] = cle.split('|');
+    const d0 = suivis.get(cle) ?? { id: null, nom, ...lignesVides() };
+    const h = hors.parDistrict.get(cle) ?? 0;
+    const d = h ? { ...d0, sites: d0.sites + h, migres: d0.migres + h } : d0;
+    const depots = depotsDistrict.get(cle) ?? null;
+    const base = eff.length ? Math.max(depots ?? 0, d.sites) : d.sites;
+    if (!parRegion.has(reg)) parRegion.set(reg, []);
+    parRegion.get(reg).push({
+      ...d, nouveaux: d.nouveaux + (nv.parDistrict.get(cle) ?? 0),
+      nouveaux_deployes: d.nouveaux_deployes + (nv.parDistrictDeployes.get(cle) ?? 0), depots, base,
+      taux_extrait: d.taux, taux: taux(d.migres, base), complet: base > 0 && d.migres === base,
+    });
+  }
+  const tri = (a, b) => b.base - a.base || a.nom.localeCompare(b.nom, 'fr');
+  return [...parRegion].map(([nom, districts]) => {
+    const t = Object.fromEntries(CLES.map((k) => [k, districts.reduce((s, d) => s + d[k], 0)]));
+    const base = districts.reduce((s, d) => s + d.base, 0);
+    return {
+      id: idRegion.get(nom) ?? null, nom, ...t, depots: eff.length ? districts.reduce((s, d) => s + (d.depots ?? 0), 0) : null, base,
+      taux: taux(t.migres, base), taux_extrait: taux(t.migres, t.sites), complet: base > 0 && t.migres === base,
+      prioritaire: regionPrioritaire(nom) !== null, districts: districts.sort(tri),
+    };
+  }).sort(tri);
+}
+
+/**
+ * Point sur les régions prioritaires LHSPLA, à partir de `regionsEtDistricts` (ou `avecReferentiel`).
  * Les 10 régions sont toujours listées, même absentes de l'extrait (présente = false).
- * Le taux porte sur les sites de l'extrait : le nombre officiel de sites par région n'est pas connu.
+ * Sans référentiel, le taux porte sur les sites de l'extrait ; avec, sur les dépôts du référentiel.
  */
 export function pointPrioritaires(regions) {
-  const zeros = () => Object.fromEntries(CLES.map((k) => [k, 0]));
-  const cumuler = (liste) => avecTaux(liste.reduce((t, r) => {
-    for (const k of CLES) t[k] += r[k];
-    return t;
-  }, zeros()));
+  const cumuler = (liste) => {
+    const t = zeros();
+    for (const r of liste) for (const k of CLES) t[k] += r[k];
+    const l = avecTaux(t);
+    if (!liste.some((r) => r.depots !== undefined && r.depots !== null)) return l;
+    const base = liste.reduce((s, r) => s + (r.base ?? r.sites), 0);
+    return { ...l, depots: liste.reduce((s, r) => s + (r.depots ?? 0), 0), base, taux_extrait: l.taux, taux: taux(t.migres, base), complet: base > 0 && t.migres === base };
+  };
   const lignes = REGIONS_PRIORITAIRES.map(([nom]) => {
     // Une région peut apparaître sous plusieurs graphies dans l'extrait
     const trouvees = regions.filter((r) => regionPrioritaire(r.nom) === nom);
     const districts = trouvees.flatMap((r) => r.districts);
     return {
-      nom, id: trouvees[0]?.id ?? null, presente: trouvees.length > 0, ...cumuler(trouvees),
+      nom, id: trouvees.find((r) => r.id)?.id ?? null, presente: trouvees.some((r) => r.sites > 0 || r.nouveaux > 0), ...cumuler(trouvees),
       districts: districts.length, districts_touches: districts.filter((d) => d.migres > 0).length,
     };
-  }).sort((a, b) => b.sites - a.sites || a.nom.localeCompare(b.nom, 'fr'));
+  }).sort((a, b) => (b.base ?? b.sites) - (a.base ?? a.sites) || a.nom.localeCompare(b.nom, 'fr'));
   return {
     regions: lignes,
     total: cumuler(lignes),
@@ -90,40 +168,60 @@ export async function objectifs() {
     nouveaux: o.objectif_nouveaux_sites || 0, detail: rows };
 }
 
-export async function synthese(imp) {
+export async function synthese(imp, vague = null) {
   const { rows: [t] } = await query(
     `SELECT ${COMPTES},
        COUNT(*) FILTER (WHERE s.statut <> 'TERMINE' AND s.date_prevue < CURRENT_DATE)::int AS en_retard,
        COUNT(*) FILTER (WHERE btrim(s.difficultes) <> '' AND upper(btrim(s.difficultes, ' .')) <> 'RAS')::int AS difficultes
-     FROM suivi_site s WHERE s.import_id = $1`, [imp.id]);
-  const regions = await regionsEtDistricts(imp.id);
+     FROM suivi_site s WHERE s.import_id = $1 ${VAGUE}`, [imp.id, vague]);
+  // Sites corrigés « migré » absents de l'extrait (migrés hors du suivi de la DAP) : comptés suivis et migrés
+  const hors = vague === null ? await migresHors(imp.id) : { total: 0 };
+  t.sites += hors.total;
+  t.migres += hors.total;
+  const regions = await regionsEtDistricts(imp.id, vague);
   const districts = regions.flatMap((r) => r.districts);
   const { rows: [prec] } = await query(
     `SELECT nb_termines, nb_nouveaux_deployes FROM import_extrait WHERE (importe_le, id) < ($1, $2)
      ORDER BY importe_le DESC, id DESC LIMIT 1`, [imp.importe_le, imp.id]);
   const obj = await objectifs();
+  // Dépôts à migrer du référentiel (sans les nouveaux sites qui y figurent)
+  const depotsTotal = vague === null ? (await effectifsAMigrer(imp.id)).reduce((s, e) => s + e.n, 0) : 0;
+  // Nouveaux sites = ceux de l'extrait + ceux de la liste permanente qui n'y figurent pas encore
+  const nv = vague === null ? await nouveauxEnPlus(imp.id) : { total: 0, deployes: 0 };
+  const nvListe = nv.total;
+  const nouveauxDeployes = t.nouveaux_deployes + nv.deployes;
   return {
     ...avecTaux(t),
+    nouveaux: t.nouveaux + nvListe,
+    nouveaux_liste: nvListe,
+    nouveaux_deployes: nouveauxDeployes,
+    migres_hors_extrait: hors.total,
     // Taux national : sites migrés rapportés à l'objectif national (ex. 2 905 sites)
     objectif_sites: obj.sites,
     objectif_districts: obj.districts,
     objectif_regions: obj.regions,
     taux_national: taux(t.migres, obj.sites),
+    // Référentiel des dépôts mSupply (nombre réel de sites à migrer), s'il est chargé
+    depots_referentiel: depotsTotal || null,
+    taux_depots: depotsTotal ? taux(t.migres, Math.max(depotsTotal, t.sites)) : null,
     sites_restants: Math.max(obj.sites - t.migres, 0),
     sites_hors_extrait: Math.max(obj.sites - t.sites, 0),
     // Nouveaux sites : déploiement direct sur Open mSupply
     objectif_nouveaux: obj.nouveaux,
-    taux_nouveaux: taux(t.nouveaux_deployes, obj.nouveaux || t.nouveaux),
+    taux_nouveaux: taux(nouveauxDeployes, obj.nouveaux || t.nouveaux + nvListe),
     // Tous les sites sur Open mSupply (migrés + nouveaux déployés)
-    sites_open_msupply: t.migres + t.nouveaux_deployes,
+    sites_open_msupply: t.migres + nouveauxDeployes,
     regions: regions.length,
     regions_touchees: regions.filter((r) => r.migres > 0).length,
     regions_completes: regions.filter((r) => r.complet).length,
     districts: districts.length,
     districts_touches: districts.filter((d) => d.migres > 0).length,
     districts_complets: districts.filter((d) => d.complet).length,
-    evolution: prec ? imp.nb_termines - prec.nb_termines : null,
-    evolution_nouveaux: prec ? imp.nb_nouveaux_deployes - prec.nb_nouveaux_deployes : null,
+    // L'évolution compare les totaux de deux imports : sans objet quand une vague est choisie
+    ...(vague === null ? {
+      evolution: prec ? imp.nb_termines - prec.nb_termines : null,
+      evolution_nouveaux: prec ? imp.nb_nouveaux_deployes - prec.nb_nouveaux_deployes : null,
+    } : {}),
   };
 }
 
@@ -133,10 +231,10 @@ export async function parVague(importId) {
   return rows.map(avecTaux);
 }
 
-export async function parCategorie(importId) {
+export async function parCategorie(importId, vague = null) {
   const { rows } = await query(
-    `SELECT s.categorie, ${COMPTES} FROM suivi_site s WHERE s.import_id = $1 GROUP BY s.categorie
-     ORDER BY array_position(ARRAY['ESPC','DISTRICT_SANITAIRE','HOPITAL_REFERENCE','A_CLASSER']::categorie_site[], s.categorie)`, [importId]);
+    `SELECT s.categorie, ${COMPTES} FROM suivi_site s WHERE s.import_id = $1 ${VAGUE} GROUP BY s.categorie
+     ORDER BY array_position($3::categorie_site[], s.categorie)`, [importId, vague, Object.keys(CATEGORIES)]);
   return rows.map(avecTaux);
 }
 
@@ -145,25 +243,25 @@ export async function parCategorie(importId) {
  * Début = « Début mission » saisi, sinon premier « Début réel » des sites ;
  * Fin   = « Fin mission » saisie, sinon dernière date de migration (fin réelle) des sites.
  */
-export async function missions(importId) {
+export async function missions(importId, vague = null) {
   const { rows } = await query(
     `SELECT r.nom AS region, d.id AS district_id, d.nom AS district, s.vague,
        COALESCE(MIN(s.debut_mission), MIN(s.debut_reel)) AS debut,
        COALESCE(MAX(s.fin_mission), MAX(s.fin_reelle) FILTER (WHERE s.statut = 'TERMINE')) AS fin,
        BOOL_OR(s.debut_mission IS NOT NULL OR s.fin_mission IS NOT NULL) AS dates_saisies,
        ${COMPTES}
-     ${JOINTURES} WHERE s.import_id = $1
+     ${JOINTURES} WHERE s.import_id = $1 ${VAGUE}
      GROUP BY r.nom, d.id, d.nom, s.vague
-     ORDER BY COALESCE(MIN(s.debut_mission), MIN(s.debut_reel)) NULLS LAST, r.nom, d.nom`, [importId]);
+     ORDER BY COALESCE(MIN(s.debut_mission), MIN(s.debut_reel)) NULLS LAST, r.nom, d.nom`, [importId, vague]);
   const jours = (a, b) => (a && b ? Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1 : null);
   return rows.map((m) => ({ ...avecTaux(m), duree_jours: jours(m.debut, m.fin), terminee: m.sites + m.nouveaux > 0 && m.non_demarres === 0 && m.en_cours === 0 && m.nouveaux === m.nouveaux_deployes }));
 }
 
-export async function rythme(importId) {
+export async function rythme(importId, vague = null) {
   const cumul = async (champ, filtre) => {
     const { rows } = await query(
-      `SELECT to_char(${champ}, 'YYYY-MM-DD') AS date, COUNT(*)::int AS n FROM suivi_site
-       WHERE import_id = $1 AND ${champ} IS NOT NULL ${filtre} GROUP BY ${champ} ORDER BY ${champ}`, [importId]);
+      `SELECT to_char(${champ}, 'YYYY-MM-DD') AS date, COUNT(*)::int AS n FROM suivi_site s
+       WHERE import_id = $1 AND ($2::int IS NULL OR vague = $2) AND ${champ} IS NOT NULL ${filtre} GROUP BY ${champ} ORDER BY ${champ}`, [importId, vague]);
     let c = 0;
     return rows.map((r) => ({ date: r.date, cumul: (c += r.n) }));
   };
@@ -191,7 +289,7 @@ export async function sites(importId, f = {}) {
   if (f.statut) ajouter('s.statut = ?', f.statut);
   if (f.vague) ajouter('s.vague = ?', +f.vague);
   if (f.type === 'MIGRATION' || f.type === 'NOUVEAU') ajouter('s.type_site = ?::type_site', f.type);
-  if (['ESPC', 'DISTRICT_SANITAIRE', 'HOPITAL_REFERENCE', 'A_CLASSER'].includes(f.categorie)) ajouter('s.categorie = ?::categorie_site', f.categorie);
+  if (Object.keys(CATEGORIES).includes(f.categorie)) ajouter('s.categorie = ?::categorie_site', f.categorie);
   if (f.retard === '1') cond.push("s.statut <> 'TERMINE' AND s.date_prevue < CURRENT_DATE");
   const { rows } = await query(
     `SELECT ${SITES_COLONNES} ${JOINTURES} LEFT JOIN membre m ON m.id = s.responsable_id
