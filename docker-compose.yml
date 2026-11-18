@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Définir POSTGRES_PASSWORD dans .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - reseau_db
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -22,8 +24,37 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - reseau_db
     ports:
       - "8080:4000"
 
+  # Administration de la base : http://localhost:5050 (port modifiable via PGADMIN_PORT)
+  pgadmin:
+    image: dpage/pgadmin4:9
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?Définir PGADMIN_EMAIL dans .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?Définir PGADMIN_PASSWORD dans .env}
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+      # Pas de vérification DNS du domaine de l'adresse (les domaines réservés comme .local restent refusés)
+      PGADMIN_CONFIG_CHECK_EMAIL_DELIVERABILITY: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      # Connexion « Suivi migration » pré-enregistrée (le mot de passe est demandé à la 1re connexion)
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - reseau_db
+    ports:
+      # Exposé seulement sur la machine hôte par défaut
+      - "${PGADMIN_ECOUTE:-127.0.0.1}:${PGADMIN_PORT:-5050}:80"
+
+networks:
+  reseau_db:
+
 volumes:
   pgdata:
+  pgadmin_data:

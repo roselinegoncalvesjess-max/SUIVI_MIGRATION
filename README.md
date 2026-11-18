@@ -60,6 +60,11 @@ docker compose up -d --build
 Ouvrir http://localhost:8080 et se connecter avec `ADMIN_IDENTIFIANT` / `ADMIN_MOT_DE_PASSE`.
 Au premier démarrage, la base est créée et les cinq membres de l'équipe SI sont enregistrés.
 
+**pgAdmin** (administration de la base) : http://localhost:5050, avec `PGADMIN_EMAIL` /
+`PGADMIN_PASSWORD`. Le serveur « Suivi migration » (hôte `db`) est déjà enregistré ; son mot de
+passe est `POSTGRES_PASSWORD`. Par défaut pgAdmin n'écoute que sur le poste local
+(`PGADMIN_ECOUTE=127.0.0.1`).
+
 Importer un extrait en ligne de commande (par exemple dans une tâche planifiée) :
 
 ```bash
